@@ -711,10 +711,9 @@ String host ;
   display.drawString(0, 11, "Chip ID " + String(ESP.getChipId(), HEX) );
   display.display();
 
-//  sprintf(nssid,"WLAN-PLUMMER\0") ;
-//  sprintf(npassword,"cheegh5S\0") ;
-  sprintf(nssid,"TP-LINK_52FC8C\0");
-  sprintf(npassword,"0052FC8C\0");
+
+  sprintf(nssid,"********\0");  // put your credentials
+  sprintf(npassword,"********\0");
 
   if ((digitalRead(SETPMODE_PIN) == HIGH) ){
     bConfig = true ;
