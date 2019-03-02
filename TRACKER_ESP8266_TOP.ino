@@ -78,8 +78,8 @@ char timeServer[40] = {"au.pool.ntp.org\0"};
 
 char buff[BUFF_MAX]; 
 
-IPAddress MyIP(192,168,2,110) ;
-IPAddress RCIP(192,168,2,255) ;
+IPAddress MyIP(192,168,0,110) ;
+IPAddress RCIP(192,168,0,255) ;
 
 const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
@@ -663,7 +663,7 @@ String host ;
   display.drawString(0, 0, "ESP Solar");
   display.drawString(0, 16, "Tracker");
   display.setFont(ArialMT_Plain_10);
-  display.drawString(0, 40, "Copyright (c) 2018");
+  display.drawString(0, 40, "Copyright (c) 2019");
   display.drawString(0, 50, "Dougal Plummer");
   display.display();
 
