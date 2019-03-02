@@ -1,17 +1,15 @@
 void BackIntheBoxMemory(){
   uint8_t i , j ;
-//  sprintf(nssid,"WLAN-PLUMMER\0") ;
-//  sprintf(npassword,"cheegh5S\0") ;
 
-  sprintf(nssid,"TP-LINK_52FC8C\0");
-  sprintf(npassword,"0052FC8C\0");
+  sprintf(nssid,"*********\0");
+  sprintf(npassword,"********\0");
   
   sprintf(NodeName,"North Tower\0") ;
   lTimeZone = 10 ;
 
   RCIP[0] = 192 ;
   RCIP[1] = 168 ; 
-  RCIP[2] = 2 ;
+  RCIP[2] = 0 ;
   RCIP[3] = 255 ;
 
   xzH = 4.0;  // hysterisis NS
