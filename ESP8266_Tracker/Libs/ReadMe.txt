@@ -1,2 +1,2 @@
 These are all the extra bits I compile with... 
-Usuallt not available anymore or they have been changed slightly or had some sort of fix.
+Usually not available anymore or they have been changed slightly or had some sort of fix.
