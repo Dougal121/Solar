@@ -10,36 +10,29 @@
 //#include <SPI.h>
 #include <EEPROM.h>
 #include <stdio.h>
-#include <LSM303.h>       // modified ... fixed a couple of bugs
+#include <LSM303.h>              
 #include <L3G.h>
 #include <SFE_BMP180.h>
 #include <TinyGPS.h>
-#include "ht16k33.h"
+#include "ht16k33.h"         // changed the default constructor
 
-#include "SSD1306.h"
+#include "SSD1306.h"         // these come from the standard book of spells (arduinoo ide lib manager)
 #include "SH1106.h"
 #include "SH1106Wire.h"
-#include "ds3231.h"
+#include "ds3231.h"          // this one is up on my site - has changed since I started
 
 
 #define BUFF_MAX 32
-/* Display settings */
-#define minRow       0              /* default =   0 */
-#define maxRow     127              /* default = 127 */
-#define minLine      0              /* default =   0 */
-#define maxLine     63              /* default =  63 */
-
-#define LineText     0
-#define Line        12
 
 const byte SETPMODE_PIN = D0 ; 
 const byte FLASH_BTN = D3 ;    // GPIO 0 = FLASH BUTTON 
 const byte SCOPE_PIN = D3 ;
 const byte FACTORY_RESET = D0 ;
 const byte LED = BUILTIN_LED ;  // = D4 ;
+const byte MAX_WIFI_TRIES = 45 ;
 
-SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2
-//SH1106Wire display(0x3c, 4, 5);   // arse about ??? GPIO 5 = D1, GPIO 4 = D2
+SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2                           onboard 0.96" LOED display as per picture
+//SH1106Wire display(0x3c, 4, 5);   // arse about ??? GPIO 5 = D1, GPIO 4 = D2       external 1.3" OLED display for a D1 R2 etc
 
 #define BUFF_MAX 32
 #define PARK_EAST 1
@@ -48,7 +41,23 @@ SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2
 #define PARK_SOUTH 4
 #define PARK_FLAT 5
 
+#define ANG_ABS_MIN_NS -10.0
+#define ANG_ABS_MAX_NS 60.0
+#define ANG_ABS_MIN_EW -80.0
+#define ANG_ABS_MAX_EW 80.0
+#define ANG_ABS_MAX_HYS_EW 20.0
+#define ANG_ABS_MIN_HYS_EW 0.1
+#define ANG_ABS_MAX_HYS_NS 20.0
+#define ANG_ABS_MIN_HYS_NS 0.1
+#define ANG_ABS_MAX_OFS_EW 20.0
+#define ANG_ABS_MIN_OFS_EW -20.0
+#define ANG_ABS_MAX_OFS_NS 20.0
+#define ANG_ABS_MIN_OFS_NS -20.0
+
+#define MINYEAR 2018
+
 #define MOTOR_DWELL 100
+#define MAX_MOTOR_PWM 1000
 
 #define HT16K33_DSP_NOBLINK 0   // constants for the half arsed cheapo display
 #define HT16K33_DSP_BLINK1HZ 4
@@ -70,16 +79,33 @@ static bool hasRTC = false;
 static bool hasPres = false ;
 
 char dayarray[8] = {'S','M','T','W','T','F','S','E'} ;
+char Toleo[10] = {"Ver 3.6\0"}  ;
 
-char NodeName[16] ={"South_Tower\0"} ;
-char nssid[20] ;
-char npassword[20] ;
-char timeServer[40] = {"au.pool.ntp.org\0"};
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  unsigned int localPort = 2390;          // 2 local port to listen for NTP UDP packets
+  unsigned int localPortCtrl = 8666;      // 4 local port to listen for Control UDP packets
+  unsigned int RemotePortCtrl = 8664;     // 6 local port to listen for Control UDP packets
+  IPAddress MyIP ;
+  IPAddress MyIPC ;
+  long lProgMethod ;                      // 
+  long lPulseTime ;                       // 
+  long lMaxDisplayValve ;                 // 
+  long lNodeAddress ;                     //  
+  float fTimeZone ;                       //  
+  IPAddress RCIP ;                        // 
+  char NodeName[24] ;                     //  
+  char nssid[24] ;                        //   
+  char npassword[24] ;                    // 
+  char cssid[24] ;                        //   
+  char cpassword[24] ;                    // 
+  long lDisplayOptions  ;                 //  
+  char timeServer[40] ;                   //    = {"au.pool.ntp.org\0"}
+} general_housekeeping_stuff_t ;          // 
+
+general_housekeeping_stuff_t ghks ;
 
 char buff[BUFF_MAX]; 
-
-IPAddress MyIP(192,168,2,110) ;
-IPAddress RCIP(192,168,2,255) ;
 
 const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of the message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
@@ -89,90 +115,108 @@ byte rtc_min ;
 byte rtc_hour ;
 byte rtc_fert_hour ;
 float rtc_temp ;
-unsigned int localPort = 2390;      // local port to listen for NTP UDP packets
-unsigned int localPortCtrl = 8666;      // local port to listen for Control UDP packets
-unsigned int RemotePortCtrl = 8664;      // local port to listen for Control UDP packets
 
 L3G gyro;
 LSM303 compass;
+LSM303::vector<int16_t> running_min = {32767, 32767, 32767}, running_max = {-32768, -32768, -32768};
 SFE_BMP180 pressure;
 TinyGPS gps;
 HT16K33 HT;
 
-int motor_recycle_x = 0 ;
-int motor_recycle_y = 0 ;
-char trackername[18] ;
-unsigned long  gpschars ; 
-float heading ;          // MODBUS MAP
-struct ts tb;             // 
-struct ts tn;             // 
-struct ts td;            //   
-struct ts tg;            // 
-struct ts tc;            //
-float ha ;
-float sunX ;
-float sunrise ;
-float sunset ;
-int iNightShutdown ;     //
-int iMultiDrive   ;      // 69    do the axis drives run together 
-time_t setchiptime ;     // 68    if set to non zero this will trigger a time set event
-float zAng ;             // 66
-float xMul = 1.0 ;       // 64
-float yMul = 1.0 ;       // 62
-float zMul = 1.0 ;       // 60
-int iXYS = 0 ;           // 59
-int iSave = 0 ;          // 58    
-int iDoSave = 0 ;        // 57
-int iGPSLock = 0  ;      // 56 
-unsigned long  fixage ;  // 54
-float xRoll = 0.0 ;      // 52
-float yRoll = 0.0 ;      // 50
-float zRoll = 0.0 ;      // 48
-float gT ;               // 46  temp from sensor
-float Pr ;               // 44  presure sensor
-float alt ;              // 42  altitude from GPS
-float T;                 // 40  temperature of board (if has RTC)
-float xzTarget ;         // 38  target for angles
-float yzTarget ;         // 36
-float xzH ;              // 34 hyserisis zone
-float yzH ;              // 32
-float xzAng;             // 30 current angles
-float yzAng;             // 28
-float xzOffset;          // 26 offset xz
-float yzOffset;          // 24 offset yz
-float dyPark;            // 22 parking position
-float dxPark;            // 20 
-float xMinVal ;          // 18 Min and Max values  X - N/S
-float xMaxVal ;          // 16 
-float yMinVal ;          // 14  Y  -- E/W
-float yMaxVal ;          // 12 
-float latitude;          // 10
-float longitude;         // 8
-int timezone;            // 7
-int iDayNight ;          // 6
-float solar_az_deg;      // 4
-float solar_el_deg;      // 2
-int iTrackMode ;         // 1 
-int iMode ;              // 0
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  int iUseGPS ;
+  int motor_recycle_x  ;
+  int motor_recycle_y  ;
+  char trackername[24] ;
+  float heading ;          // 
+  struct ts tb;            // 
+  struct ts tn;            // 
+  struct ts td;            //   
+  struct ts tg;            // 
+  struct ts tc;            //
+  float ha ;
+  float sunX ;
+  float sunrise ;
+  float sunset ;
+  int iNightShutdown ;     //
+  int iMultiDrive   ;      //   do the axis drives run together 
+  time_t setchiptime ;     //   if set to non zero this will trigger a time set event
+  float zAng ;             // 
+  float xMul  ;            // 
+  float yMul  ;            // 
+  float zMul  ;            // 
+  int iXYS  ;              // 
+  int iSave ;              //     
+  int iDoSave ;            // 
+  int iGPSLock  ;          //  
+  unsigned long  fixage ;  // 
+  float xRoll  ;           // 
+  float yRoll  ;           // 
+  float zRoll  ;           // 
+  float gT ;               //  temp from sensor
+  float Pr ;               //  presure sensor
+  float alt ;              //  altitude from GPS
+  float T;                 //  temperature of board (if has RTC)
+  float xzTarget ;         //  target for angles
+  float yzTarget ;         // 
+  float xzH ;              //  hyserisis zone
+  float yzH ;              // 
+  float xzAng;             //  current angles
+  float yzAng;             // 
+  float xzOffset;          //  offset xz
+  float yzOffset;          //  offset yz
+  float dyPark;            //  parking position
+  float dxPark;            //  
+  float xMinVal ;          //  Min and Max values  X - N/S
+  float xMaxVal ;          //  
+  float yMinVal ;          //   Y  -- E/W
+  float yMaxVal ;          //  
+  float latitude;          // 
+  float longitude;         // 
+  int iDayNight ;          // 
+  float solar_az_deg;      // 
+  float solar_el_deg;      // 
+  int iTrackMode ;         //  
+  int iMode ;              // 
+  int iMaxWindSpeed ;      //  max speeed  - set to zero to disable
+  int iMountType ;         //  0 - for Equitorial Mount         1 -  for Alt / Az Mount
+  int iMaxWindTime ; 
+  int iMinWindTime ; 
+  float dyParkWind ;       //  parking position
+  float dxParkWind ;       //  
+  int xMaxMotorSpeed ;    // maximum motor speed
+  int yMaxMotorSpeed ;    // maximum motor speed
+  LSM303::vector<int16_t> mag_min ;
+  LSM303::vector<int16_t> mag_max ;
+} tracker_stuff_t ;        // 
+
+tracker_stuff_t   tv   ;    // tracker variables
 
 int iPMode;
 int iPWM_YZ ;
 int iPWM_XZ ;
 int iPowerUp = 0 ;
+unsigned long  gpschars ; 
 
-int iUseGPS = 0 ;
+float xMag = 0 ;           // 
+float yMag = 0 ;           // 
+float zMag = 0 ;           // 
 
-long lTimeZone ;
+//long lTimeZone ;
+
 long lScanCtr = 0 ;
 long lScanLast = 0 ;
 time_t AutoOff_t ;         // auto off until time > this date
 bool bConfig = false ;
 uint8_t rtc_status ;
+float decl ;
+float eqtime ;
 
-
+bool bMagCal = false ;
 bool bDoTimeUpdate = false ;
 long lTimePrev ;
 long lTimePrev2 ;
+long lRebootCode = 0 ;
 
 WiFiUDP ntpudp;
 WiFiUDP ctrludp;
@@ -183,490 +227,52 @@ ESP8266HTTPUpdateServer OTAWebUpdater;
 //DNSServer dnsServer;
 
 
-
-void StopYZ(){
-  iPWM_YZ=0 ;
-  motor_recycle_y = MOTOR_DWELL ;
-}
-void StopXZ(){
-  iPWM_XZ=0 ;
-  motor_recycle_x = MOTOR_DWELL ;
-}
-
-void ActivateRelays(int iAllStop) {
-  if (motor_recycle_y > 0 ){
-    motor_recycle_y-- ;
-  }
-  if (motor_recycle_x > 0 ){
-    motor_recycle_x-- ;
-  }
-  if ( iAllStop == 0 ) {
-    StopYZ() ;
-    StopXZ() ;
-  } else {
-    if (( iPWM_YZ==0 ) && (motor_recycle_y == 0 )){
-      if ((( yzAng  ) < ( yzTarget - yzH )) ) {   // do Y ie E/W before N/S
-        digitalWrite(RELAY_YZ_DIR, LOW) ;
-        iPWM_YZ=2 ;
-      }
-      if ((( yzAng ) > ( yzTarget + yzH )) ) {
-        digitalWrite(RELAY_YZ_DIR, HIGH) ;
-        iPWM_YZ=2 ;
-      }
-    }
-    if ( iPWM_YZ>0 ){
-      if ((yzAng > yzTarget) && ( digitalRead(RELAY_YZ_DIR)==LOW )) {
-        StopYZ() ;
-      }
-      if ((yzAng < yzTarget) && ( digitalRead(RELAY_YZ_DIR)==HIGH )) {
-        StopYZ() ;
-      }
-    }
-
-    if (( iPWM_YZ==0) || ( iMultiDrive == 1 )) {  // if finished on E/W you can do N/S  or if we are doing multidrive
-        if (( iPWM_XZ==0 ) && (motor_recycle_x == 0 )){
-          if ((xzAng < ( xzTarget - xzH ))  )  { // turn on if not in tolerance
-            digitalWrite(RELAY_XZ_DIR, LOW) ;
-            iPWM_XZ=2 ;
-          }
-          if ((xzAng > ( xzTarget + xzH )) ) { // turn on if not in tolerance
-            digitalWrite(RELAY_XZ_DIR, HIGH) ;
-            iPWM_XZ=2 ;
-          }
-        }
-    }else{
-      if ((iPWM_XZ>0 )){
-        StopXZ() ;
-      }
-    }
-    if ( iPWM_XZ>0 ){
-      if ((xzAng > xzTarget ) && ( digitalRead(RELAY_XZ_DIR)==LOW ))  { // if on turn off
-        StopXZ() ;
-      }
-      if ((xzAng < xzTarget ) && ( digitalRead(RELAY_XZ_DIR)==HIGH ))  { // if on turn off
-        StopXZ() ;
-      }
-    }
-  }
-  if (iPWM_XZ>0){
-    iPWM_XZ += 1 ;
-  }
-  if (iPWM_YZ>0){
-    iPWM_YZ += 1 ;
-  }
-  iPWM_XZ = constrain(iPWM_XZ,0,1023);  // 254 in atmel - arduino land 
-  iPWM_YZ = constrain(iPWM_YZ,0,1023);  //   
-  analogWrite(RELAY_XZ_PWM,iPWM_XZ);
-  analogWrite(RELAY_YZ_PWM,iPWM_YZ);
-}
-
-// Arduino doesnt have these to we define from a sandard libruary
-float arcsin(float x) {
-  return (atan(x / sqrt(-x * x + 1)));
-}
-float arccos(float x) {
-  return (atan(x / sqrt(-x * x + 1)) + (2 * atan(1)));
-}
-// fractional orbital rotation in radians
-float gama(struct ts *tm) {
-  return ((2 * PI / 365 ) *  DayOfYear(tm->year , tm->mon , tm->mday , tm->hour , tm->min ));
-}
-// equation of rime
-float eqTime(float g) {
-  return (229.18 * ( 0.000075 + ( 0.001868 * cos(g)) - (0.032077 * sin(g)) - (0.014615 * cos (2 * g)) - (0.040849 * sin(2 * g))));
-}
-// declination of sun in radians
-float Decl(float g) {
-  return ( 0.006918 - (0.399912 * cos(g)) + (0.070257 * sin(g)) - (0.006758 * cos(2 * g)) + ( 0.000907 * sin(2 * g)) - ( 0.002697 * cos(3 * g)) + (0.00148 * sin(3 * g)) );
-}
-float TimeOffset(float longitude , struct ts *tm ,  int timezone ) {
-  float dTmp ;
-  dTmp = (-4.0 * longitude ) + (60 * timezone) - eqTime(gama(tm)) ;
-  return (dTmp);
-}
-
-float TrueSolarTime(float longitude , struct ts *tm ,  int timezone ) {
-  float dTmp ;
-  dTmp = ( 60.0 * tm->hour ) + (1.0 * tm->min) + (1.0 * tm->sec / 60) - TimeOffset(longitude, tm, timezone) ;
-  return (dTmp);
-}
-float HourAngle(float longitude , struct  ts *tm ,  int timezone) {
-  float dTmp;
-  dTmp = (TrueSolarTime(longitude, tm, timezone) / 4 ) - 180 ; // 720 minutes is solar noon -- div 4 is 180
-  return (dTmp);
-}
-// Hour angle for sunrise and sunset only
-float HA (float lat , struct ts *tm ) {
-  float latRad ;
-  latRad = lat * 2 * PI / 360 ;
-  return ( acos((cos(90.833 * PI / 180 ) / ( cos(latRad) * cos(Decl(gama(tm)))) - (tan(latRad) * tan(Decl(gama(tm)))))) / PI * 180  );
-}
-
-float Sunrise(float longitude , float lat , struct ts *tm , int timezone) {
-  return (720 - ( 4.0 * (longitude + HA(lat, tm))) + (60 * timezone) - eqTime(gama(tm))  ) ;
-}
-float Sunset(float longitude , float lat , struct ts *tm , int timezone) {
-  return (720 - ( 4.0 * (longitude - HA(lat, tm))) + (60 * timezone) - eqTime(gama(tm))  ) ;
-}
-float SNoon(float longitude , float lat , struct ts *tm , int timezone) {
-  return (720 - ( 4.0 * (longitude  + (60 * timezone) - eqTime(gama(tm))))  ) ;
-}
-
-float SolarZenithRad(float longitude , float lat , struct ts *tm , int timezone) {
-  float latRad ;
-  float decRad ;
-  float HourAngleRad ;
-  float dTmp ;
-
-  latRad = lat * 2 * PI / 360 ;
-  decRad = Decl(gama(tm));
-  HourAngleRad = HourAngle (longitude , tm , timezone ) * PI / 180 ;
-  dTmp = acos((sin(latRad) * sin(decRad)) + (cos(latRad) * cos(decRad) * cos(HourAngleRad)));
-  return (dTmp) ;
-
-}
-float SolarElevationRad(float longitude , float lat , struct ts *tm ,  int timezone ) {
-  return ((PI / 2) - SolarZenithRad(longitude , lat , tm , timezone )) ;
-}
-
-float SolarAzimouthRad(float longitude , float lat , struct ts *tm ,  int timezone) {
-  float latRad ;
-  float decRad ;
-  float solarzenRad ;
-  float HourAngleRad ;
-  float dTmp ;
-  latRad = lat * 2 * PI / 360 ;
-  decRad = Decl(gama(tm));
-  solarzenRad = SolarZenithRad ( longitude , lat , tm , timezone ) ;
-  HourAngleRad = HourAngle (longitude , tm , timezone ) * PI / 180 ;
-  dTmp = acos(((sin(decRad) * cos(latRad)) - (cos(HourAngleRad) * cos(decRad) * sin(latRad))) / sin(solarzenRad)) ;
-  if ( HourAngleRad < 0 ) {
-    return (dTmp) ;
-  } else {
-    return ((2 * PI) - dTmp) ;
-  }
-}
-
-int NumberOK (float target) {
-  int tmp = 0 ;
-  tmp = isnan(target);
-  if ( tmp != 1 ) {
-    tmp = isinf(target);
-  }
-  return (tmp);
-}
-
-
-
-
-unsigned long sendCTRLpacket(IPAddress address){
-int j ;  
-byte packetBuffer[50];           //buffer to hold outgoing packets  
-  Serial.println("sending CTRL packet...");
-                    
-  memset(packetBuffer, 0, sizeof(packetBuffer[50]));    // set all bytes in the buffer to 0
-  packetBuffer[0] = 0xff;                       // broadcast as all stations
-  packetBuffer[1] = 0xff;  // 
-  packetBuffer[2] = 0xff;  // 
-  packetBuffer[3] = 0xff;  // 
-  
-  ctrludp.beginPacket(address, RemotePortCtrl);      // Send control data to the remote port - Broadcast ???
-  ctrludp.write(packetBuffer, sizeof(packetBuffer[50]));
-  ctrludp.endPacket();
-}
-
-
-
-
- 
-
-void FloatToModbusWords(float src_value , uint16_t * dest_lo , uint16_t * dest_hi ) {
-  uint16_t tempdata[2] ;
-  float *tf ;
-  tf = (float * )&tempdata[0]  ;
-  *tf = src_value ;
-  *dest_lo = tempdata[1] ;
-  *dest_hi = tempdata[0] ;
-}
-float FloatFromModbusWords( uint16_t dest_lo , uint16_t dest_hi ) {
-  uint16_t tempdata[2] ;
-  float *tf ;
-  tf = (float * )&tempdata[0]  ;
-  tempdata[1] = dest_lo ;
-  tempdata[0] = dest_hi  ;
-  return (*tf) ;
-}
-
-float LoadFloatFromEEPROM(int address,float minval,float maxval, float defaultval){
-float tmp ;  
-int i ;
-byte  *ba ;  
-
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    ba[i] = EEPROM.read((address*4)+i);  // read the 4 bytes
-  }
-  if (( tmp < minval ) || ( tmp > maxval )) {
-    tmp = defaultval ;
-    for ( i = 0 ; i < 4 ; i++ ){
-      EEPROM.write((address*4)+i , ba[i] );
-      EEPROM.commit();  // save changes in one go ???    
-    }  
-  }
-  return(tmp);  
-}
-
-int LoadIntFromEEPROM(int address,int minval,int maxval, int defaultval){
-int dummy1 = 0 ; // belt and braces ... dont know which way the stack works
-int tmp ;  
-int dummy2 = 0 ; // yep write this one as well ... maybe
-int i ;
-byte  *ba ;  
-
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    ba[i] = EEPROM.read((address*4)+i);  // read the 4 bytes
-  }
-  if (( tmp < minval ) || ( tmp > maxval )) {
-    tmp = defaultval ;
-    for ( i = 0 ; i < 4 ; i++ ){
-      EEPROM.write((address*4)+i , ba[i] );
-      EEPROM.commit();  // save changes in one go ???    
-    }  
-  }
-  return(tmp);  
-}
-int LoadLongFromEEPROM(int address,long minval,long maxval, long defaultval){
-long tmp ;
-int i ;
-byte  *ba ;  
-
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    ba[i] = EEPROM.read((address*4)+i);  // read the 4 bytes
-  }
-  if (( tmp < minval ) || ( tmp > maxval )) {
-    tmp = defaultval ;
-    for ( i = 0 ; i < 4 ; i++ ){
-      EEPROM.write((address*4)+i , ba[i] );
-      EEPROM.commit();  // save changes in one go ???    
-    }  
-  }
-  return(tmp);  
-}
-
-time_t LoadTimeFromEEPROM(int address, time_t defaultval){
-time_t tmp ;
-int i ;
-byte  *ba ;  
-
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    ba[i] = EEPROM.read((address*4)+i);  // read the 4 bytes
-  }
-  if ( year(tmp) < 2000 ) {
-    tmp = defaultval ;
-    for ( i = 0 ; i < 4 ; i++ ){
-      EEPROM.write((address*4)+i , ba[i] );
-      EEPROM.commit();  // save changes in one go ???    
-    }  
-  }
-  return(tmp);  
-}
-
-void LoadCharFromEEPROM(int address , char * target , int targetsize ){
-  for ( int i = 0 ; i < targetsize ; i++ ){
-    target[i] = EEPROM.read((address*4)+i);  
-  }
-}
-void SaveCharToEEPROM(int address , char * target , int targetsize ){
-  for ( int i = 0 ; i < targetsize ; i++ ){
-    EEPROM.write((address*4)+i,target[i]);  
-  }
-}
-
-void LoadIPFromEEPROM(int address , IPAddress * target ){
-  for ( int i = 0 ; i < 4 ; i++ ){
-    target[i] = EEPROM.read((address*4)+i);  
-  }  
-}
-void SaveIPToEEPROM(int address , IPAddress * target ){
-  for ( int i = 0 ; i < 4 ; i++ ){
-    EEPROM.write((address*4)+i,target[i]);  
-  }  
-}
-byte LoadDayByteFromEEPROM(int address, int ofs){
-byte tmp ;  
-  ofs %= 4 ;
-  tmp = EEPROM.read((address*4)+ofs);  // read the 4 bytes
-  return(tmp);  
-}
-
-void SaveDayByteToEEPROM(int address, int ofs,byte val){
-byte tmp ;  
-  ofs %= 4 ;
-  EEPROM.write((address*4)+ofs,val);  // read the 4 bytes
-}
-
-void SaveFloatToEEPROM(int address,float val){
-float tmp ;  
-int i ;
-byte  *ba ;  
-  tmp = val ;
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    EEPROM.write((address*4)+i , ba[i] );
-  }  
-}
-void SaveLongToEEPROM(int address,long val){
-long tmp ;  
-int i ;
-byte  *ba ;  
-  tmp = val ;
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    EEPROM.write((address*4)+i , ba[i] );
-  }  
-}
-void SaveTimeToEEPROM(int address,time_t val){
-time_t tmp ;  
-int i ;
-byte  *ba ;  
-  tmp = val ;
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    EEPROM.write((address*4)+i , ba[i] );
-  }  
-}
-void SaveIntToEEPROM(int address,int val){
-int dummy1 = 0 ;
-int tmp ;  
-int dummy2 = 0 ;
-int i ;
-byte  *ba ;  
-  tmp = val ;
-  ba =(byte *)&tmp ; // set the byte array to point at the long
-  for ( i = 0 ; i < 4 ; i++ ){
-    EEPROM.write((address*4)+i , ba[i] );
-  }  
-}
-
-void LoadParamsFromEEPROM(bool bLoad){
-  if ( bLoad ) {
-    xzH = LoadFloatFromEEPROM(0,0.1,20.0,4.0);  // hysterisis NS
-    yzH = LoadFloatFromEEPROM(1,0.1,20.0,4.0);  //    ""      EW
-  
-    dyPark = LoadFloatFromEEPROM(2,-70.0,50.0,0);  
-    dxPark = LoadFloatFromEEPROM(3,-5.0,50.0,0.0);  
-    
-    xzOffset = LoadFloatFromEEPROM(4,-90.0,90.0,0);  // NS
-    yzOffset = LoadFloatFromEEPROM(5,-90.0,90.0,0);  // EW
-  
-    xzTarget = LoadFloatFromEEPROM(6,-90.0,90.0,0);  // NS
-    yzTarget = LoadFloatFromEEPROM(7,-90.0,90.0,0);  // EW
-  
-    xMinVal = LoadFloatFromEEPROM(8,-10.0,60.0,0.0);   // NS
-    xMaxVal = LoadFloatFromEEPROM(9,-10.0,60.0,45);
-  
-    yMinVal = LoadFloatFromEEPROM(10,-70.0,50.0,-65);  // EW
-    yMaxVal = LoadFloatFromEEPROM(11,-70.0,50.0,45);
-  
-    iTrackMode = LoadIntFromEEPROM(12,-1,4,0);
-      
-    latitude = LoadFloatFromEEPROM(13,-90.0,90.0,-34.051219);
-    longitude = LoadFloatFromEEPROM(14,-180.0,180.0,142.013618);
-    timezone = LoadIntFromEEPROM(15,0,23,10);  
-    xMul = LoadFloatFromEEPROM(16,-10,10,1);  
-    yMul = LoadFloatFromEEPROM(17,-10,10,1);  
-    zMul = LoadFloatFromEEPROM(18,-10,10,1);  
-    iXYS = LoadIntFromEEPROM(19,0,1,0);
-    if ( xMul == 0.0 )  // zero is rubbish value so take 1.0 as the default
-      xMul = 1.0 ;
-    if ( yMul == 0.0 )
-      yMul = 1.0 ;
-    if ( zMul == 0.0 )
-      zMul = 1.0 ;
-    iNightShutdown = LoadIntFromEEPROM(20,0,1,1);
-    iMultiDrive = LoadIntFromEEPROM(21,0,1,0);
-    EEPROM.get((23 * sizeof(float)) , iUseGPS ) ;
-    if (digitalRead(FACTORY_RESET)== LOW) {
-        MyIP = IPAddress(192,168,42,1);
-        sprintf(trackername,"Most Excellent\0");
-        sprintf(nssid , "Configure\0") ;
-        sprintf(npassword, "\0");      
-    }else{
-      EEPROM.get((22 * sizeof(float)) , MyIP );
-      if ((( MyIP[0] == 255 ) && ( MyIP[1] == 255 ))) {
-        MyIP = IPAddress(192,168,42,1);
-      }
-      EEPROM.get((30 * sizeof(float)) , trackername );
-      if ( String(trackername).length() < 2 ){
-        sprintf(trackername,"Most Excellent\0");
-      }
-      EEPROM.get((40 * sizeof(float)) , nssid );
-      if ( String(nssid).length() < 2 ) {
-        sprintf(nssid , "Configure\0") ;
-        sprintf(npassword, "\0");
-      }else{
-        EEPROM.get((45 * sizeof(float)) , npassword );
-      }
-      EEPROM.get((50 * sizeof(float)) , timeServer );
-    }
-  }else{
-    EEPROM.put( 0 , xzH );
-    EEPROM.put(0 + (1 * sizeof(float)) , yzH );
-    EEPROM.put(0 + (2 * sizeof(float)) , dyPark );
-    EEPROM.put(0 + (3 * sizeof(float)) , dxPark );
-    EEPROM.put(0 + (4 * sizeof(float)) , xzOffset );
-    EEPROM.put(0 + (5 * sizeof(float)) , yzOffset );
-    EEPROM.put(0 + (6 * sizeof(float)) , xzTarget );
-    EEPROM.put(0 + (7 * sizeof(float)) , yzTarget );
-    EEPROM.put(0 + (8 * sizeof(float)) , xMinVal );
-    EEPROM.put(0 + (9 * sizeof(float)) , xMaxVal );
-    EEPROM.put(0 + (10 * sizeof(float)) , yMinVal );
-    EEPROM.put(0 + (11 * sizeof(float)) , yMaxVal );
-    EEPROM.put(0 + (12 * sizeof(float)) , iTrackMode );
-    EEPROM.put(0 + (13 * sizeof(float)) , latitude );
-    EEPROM.put(0 + (14 * sizeof(float)) , longitude );
-    EEPROM.put(0 + (15 * sizeof(float)) , timezone );  
-    EEPROM.put(0 + (16 * sizeof(float)) , xMul );
-    EEPROM.put(0 + (17 * sizeof(float)) , yMul );
-    EEPROM.put(0 + (18 * sizeof(float)) , zMul );
-    EEPROM.put(0 + (19 * sizeof(float)) , iXYS );  
-    EEPROM.put(0 + (20 * sizeof(float)) , iNightShutdown );  
-    EEPROM.put(0 + (21 * sizeof(float)) , iMultiDrive );  
-    EEPROM.put(0 + (22 * sizeof(float)) , MyIP );  
-    EEPROM.put(0 + (23 * sizeof(float)) , iUseGPS );      
-    EEPROM.put(0 + (30 * sizeof(float)) , trackername);
-    EEPROM.put(0 + (40 * sizeof(float)) , nssid);
-    EEPROM.put(0 + (45 * sizeof(float)) , npassword);
-    EEPROM.put(0 + (50 * sizeof(float)) , timeServer);
-    EEPROM.commit();                                                       // save changes in one go ???
-  }
-}
-
-
 //  ##############################  SETUP   #############################
 void setup() {
 int i , j = 0; 
 String host ;
- 
-  pinMode(LED,OUTPUT);  //  builtin LED
-  pinMode(SETPMODE_PIN,INPUT_PULLUP);
+
+  Serial.begin(115200);           // sert same as upload so less issues with serial monitor being open
+  Serial.setDebugOutput(true);    // we will switch this off later in the setup
+  Serial.println(".");
   
+  pinMode(LED,OUTPUT);                  //  builtin LED
+  pinMode(SETPMODE_PIN,INPUT_PULLUP);   // flashy falshy
+
+  EEPROM.begin(1024);                   // open our safe and sacrate repository
+  LoadParamsFromEEPROM(true);
+
+  Serial.println(ghks.cssid[0]);
+  if (( ghks.cssid[0] == 0x00 ) || ( ghks.cssid[0] == 0xff )){   // pick a default setup ssid if none
+    Serial.println("Blank Memory - Resetting Memory to Defaults");
+    BackIntheBoxMemory();           // blank memory detector - cssid should be a roach motel... once set should stay that way
+  }
+
+  tv.motor_recycle_x = 0 ;         // these are all in eeprom but thet prolly shouldnt be
+  tv.motor_recycle_y = 0 ; 
+  tv.iSave = 0 ;              
+  tv.iDoSave = 0 ;        
+  tv.iGPSLock = 0  ;       
+  tv.fixage = 0 ; 
+
   display.init();
-  display.flipScreenVertically();
+   if (( ghks.lDisplayOptions & 0x01 ) == 0 ) {  // if bit one on then flip the display
+    display.flipScreenVertically();
+  } 
 
-  /* show start screen */
   display.clear();
+  display.setTextAlignment(TEXT_ALIGN_CENTER);  
   display.setFont(ArialMT_Plain_16);
-  display.drawString(0, 0, "ESP Solar");
-  display.drawString(0, 16, "Tracker");
+  display.drawString(63, 0, "ESP Solar");
+  display.drawString(63, 16, "Tracker");
   display.setFont(ArialMT_Plain_10);
-  display.drawString(0, 40, "Copyright (c) 2018");
+  display.setTextAlignment(TEXT_ALIGN_LEFT);  
+  display.drawString(0, 40, "Copyright (c) 2019");
   display.drawString(0, 50, "Dougal Plummer");
+  display.setTextAlignment(TEXT_ALIGN_RIGHT);  
+  display.drawString(127, 50, String(Toleo));
   display.display();
-
+  
   compass.init();
   compass.enableDefault();
   compass.setTimeout(1000);
@@ -688,19 +294,24 @@ String host ;
   iPWM_XZ = 0 ;
   ActivateRelays(0); // call an all stop first
 
-  EEPROM.begin(1024);
-  LoadParamsFromEEPROM(true);
+  if (( tv.mag_min.x >= 0 ) || ( tv.mag_max.x <= 0 )){
+    compass.m_min = (LSM303::vector<int16_t>){-32767, -32767, -32767};
+    compass.m_max = (LSM303::vector<int16_t>){+32767, +32767, +32767};    
+  }else{
+    compass.m_min = tv.mag_min ;
+    compass.m_max = tv.mag_max ;
+  }
 
-  compass.m_min = (LSM303::vector<int16_t>) {-3848, -1822, -1551 };   // calibration figures are empirical
-  compass.m_max = (LSM303::vector<int16_t>) { +3353, +5127, +5300};
+//  compass.m_min = (LSM303::vector<int16_t>) {-3848, -1822, -1551 };   // calibration figures are empirical
+//  compass.m_max = (LSM303::vector<int16_t>) { +3353, +5127, +5300};
 
   
   delay(1000);
-  if (iUseGPS==0){
+  if (tv.iUseGPS==1){
+    Serial.begin(9600);    // gps on serial port
+  }else{
     Serial.begin(115200);
     Serial.println("Warp Speed no GPS !");
-  }else{
-    Serial.begin(9600);    
   }
   Serial.setDebugOutput(true);  
   Serial.println("Chip ID " + String(ESP.getChipId(), HEX));
@@ -711,113 +322,136 @@ String host ;
   display.drawString(0, 11, "Chip ID " + String(ESP.getChipId(), HEX) );
   display.display();
 
-  sprintf(nssid,"*********\0");    // extra cos blank CPU is not working yet
-  sprintf(npassword,"*********\0");  
 
-  if ((digitalRead(SETPMODE_PIN) == HIGH) ){
-    bConfig = true ;
-    IPAddress localIp(192, 168, 5 +(ESP.getChipId() & 0x7f ) , 1);
-    IPAddress MaskIp(255, 255, 255 , 0);
-    WiFi.softAPConfig(localIp,localIp,MaskIp);
-    WiFi.softAP(nssid); // configure mode no password
-    MyIP = WiFi.softAPIP();
-    Serial.print("Soft AP IP address: ");
-    Serial.println(MyIP);
-    display.drawString(0, 22, "Soft AP IP address: "+String(MyIP) );
-    display.display();
+
+  WiFi.disconnect();
+  Serial.println("Configuring soft access point...");
+  WiFi.mode(WIFI_AP_STA);  // we are having our cake and eating it eee har
+  sprintf(ghks.cssid,"Configure_%08X\0",ESP.getChipId());
+  if (( ghks.cssid[0] == 0 ) || ( ghks.cssid[1] == 0 ) || ( ghks.cssid[0] == 255 ) || ( ghks.cssid[1] == 255 )){   // pick a default setup ssid if none
+    sprintf(ghks.cpassword,"\0");
+  }
+  ghks.MyIPC = IPAddress (192, 168, 5 +(ESP.getChipId() & 0x7f ) , 1);
+  WiFi.softAPConfig(ghks.MyIPC,ghks.MyIPC,IPAddress (255, 255, 255 , 0));  
+  Serial.println("Starting access point...");
+  Serial.print("SSID: ");
+  Serial.println(ghks.cssid);
+  Serial.print("Password: >");
+  Serial.print(ghks.cpassword);
+  Serial.println("< " + String(ghks.cpassword[0]));
+  if (( ghks.cpassword[0] == 0 ) || ( ghks.cpassword[0] == 0xff)){
+    WiFi.softAP((char*)ghks.cssid);                   // no passowrd
   }else{
-    bConfig = false ;   // are we in factory configuratin mode
-    Serial.println(String(nssid));
-    Serial.println(String(npassword));
-    display.drawString(0, 22, String(nssid) );
-    display.drawString(0, 33, String(npassword) );
-    display.display();
-    if ( npassword[0] == 0 ){
-      WiFi.begin((char*)nssid);                    // connect to unencrypted access point      
-    }else{
-      WiFi.begin((char*)nssid, (char*)npassword);  // connect to access point with encryption
-    }
-    while (( WiFi.status() != WL_CONNECTED ) && ( j < 20 )) {
-     j = j + 1 ;
-     delay(500);
-     Serial.print("+");
-    } 
-    if ( j >= 20 ) {
-       bConfig = true ;
-       WiFi.disconnect();
-       IPAddress localIp(192, 168, 5 +(ESP.getChipId() & 0x7f ) , 1);
-       IPAddress MaskIp(255, 255, 255 , 0);
-       WiFi.softAPConfig(localIp,localIp,MaskIp);
-       WiFi.softAP(nssid); // configure mode no password
-       MyIP = WiFi.softAPIP();
-       Serial.print("Soft AP IP address: ");
-       Serial.println(MyIP);
-       display.drawString(0, 22, "Soft AP IP address: "+String(MyIP) );
-       display.display();
-    }else{
-       Serial.println("");
-       Serial.println("WiFi connected");  
-       Serial.print("IP address: ");
-       MyIP =  WiFi.localIP() ;
-       Serial.println(MyIP) ;
-       display.drawString(0, 53, "IP "+String(MyIP) );
-       display.display();
-       hasNet = true ;
-    }
-    if (localPortCtrl == localPort ){             // bump the NTP port up if they ar the same
-      localPort++ ;
-    }
-    Serial.println("Starting UDP");
-    ntpudp.begin(localPort);                      // this is the recieve on NTP port
+    WiFi.softAP((char*)ghks.cssid,(char*) ghks.cpassword);
+  }
+  ghks.MyIPC = WiFi.softAPIP();  // get back the address to verify what happened
+  Serial.print("Soft AP IP address: ");
+  snprintf(buff, BUFF_MAX, ">> IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);      
+  Serial.println(buff);
+ 
+  bConfig = false ;   // are we in factory configuratin mode
+  display.display();
+  if ( ghks.npassword[0] == 0 ){
+    WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point      
+  }else{
+    WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
+  }
+  while (( WiFi.status() != WL_CONNECTED ) && ( j < MAX_WIFI_TRIES )) {
+    j = j + 1 ;
+    delay(250);
+    digitalWrite(BUILTIN_LED,!digitalRead(BUILTIN_LED));               // rapid flashy when we are trying to login
+    delay(250);
+    display.clear();
+    display.setTextAlignment(TEXT_ALIGN_LEFT);
+    display.drawString(0, 0, "Chip ID " + String(ESP.getChipId(), HEX) );
+    display.drawString(0, 9, String("SSID:") );
+    display.drawString(0, 18, String("Password:") );
+    display.setTextAlignment(TEXT_ALIGN_RIGHT);
+    display.drawString(128 , 0, String(WiFi.RSSI()));
+    display.drawString(128, 9, String(ghks.nssid) );
+    display.drawString(128, 18, String(ghks.npassword) );
+    display.drawString(j*4, 27 , String(">") );
+    display.drawString(0, 36 , String(1.0*j/2) + String(" (s)" ));   
+    snprintf(buff, BUFF_MAX, ">>  IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);            
+    display.setTextAlignment(TEXT_ALIGN_CENTER);
+    display.drawString(63 , 54 ,  String(buff) );
+    display.display();     
+    digitalWrite(BUILTIN_LED,!digitalRead(BUILTIN_LED));
+  } 
+  if ( j >= MAX_WIFI_TRIES ) {
+     bConfig = true ;
+     WiFi.disconnect();
+  }else{
+     Serial.println("");
+     Serial.println("WiFi connected");  
+     Serial.print("IP address: ");
+     ghks.MyIP =  WiFi.localIP() ;
+     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);            
+     Serial.println(buff);
+     display.drawString(0 , 53 ,  String(buff) );
+     display.display();
+  }
+  if (ghks.localPortCtrl == ghks.localPort ){             // bump the NTP port up if they ar the same
+    ghks.localPort++ ;
+  }
+//    Serial.println("Starting UDP");
+    ntpudp.begin(ghks.localPort);                      // this is the recieve on NTP port
     display.drawString(0, 44, "NTP UDP " );
     display.display();
-    Serial.print("NTP Local UDP port: ");
-    Serial.println(ntpudp.localPort());
-    ctrludp.begin(localPortCtrl);                 // recieve on the control port
+//    Serial.print("NTP Local UDP port: ");
+//    Serial.println(ntpudp.localPort());
+    ctrludp.begin(ghks.localPortCtrl);                 // recieve on the control port
     display.drawString(64, 44, "CTRL UDP " );
     display.display();
-    Serial.print("Control Local UDP port: ");
-    Serial.println(ctrludp.localPort());
-  }                                              // end of the normal setup
-  host = trackername ;
-  String(host).replace(" ","_");
-  String(host).toCharArray(buff,sizeof(buff));
-  if (MDNS.begin(buff)) {
+//    Serial.print("Control Local UDP port: ");
+//    Serial.println(ctrludp.localPort());
+                                                // end of the normal setup
+ 
+/*  sprintf(host,"Control_%08X\0",ESP.getChipId());
+
+  if (MDNS.begin(host)) {
     MDNS.addService("http", "tcp", 80);
     Serial.println("MDNS responder started");
     Serial.print("You can now connect to http://");
     Serial.print(host);
     Serial.println(".local");
   }
+*/
 
   server.on("/", handleRoot);
   server.on("/setup", handleRoot);
   server.on("/scan", i2cScan);
+  server.on("/eeprom", DisplayEEPROM);  
+  server.on("/info", handleInfo);  
   server.on("/stime", handleRoot);
+  server.on("/sensor",handleRoot);
   server.onNotFound(handleNotFound);  
   server.begin();
   Serial.println("HTTP server started");
- 
-//  dnsServer.setTTL(300);
-//  dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
-//  dnsServer.start(53,"injector.local",myIP);
-  tc.mon = 0 ;
-  tc.wday = 0 ;
+
+  tv.tg.year = 1970 ;   //  absolute zero of time ;)
+  tv.tg.mon = 1 ;
+  tv.tg.mday = 1;
+  tv.tg.hour = 0;
+  tv.tg.min = 0;
+  tv.tg.sec = 0;
+      
+  tv.tc.mon = 0 ;
+  tv.tc.wday = 0 ;
   DS3231_init(DS3231_INTCN); // look for a rtc
-  DS3231_get(&tc);
+  DS3231_get(&tv.tc);
   rtc_status = DS3231_get_sreg();
-  if (((tc.mon < 1 )|| (tc.mon > 12 ))&& (tc.wday>8)){  // no rtc to load off
+  if (((tv.tc.mon < 1 )|| (tv.tc.mon > 12 )) ){  // no rtc to load off  && (tv.tc.wday>8)
     Serial.println("NO RTC ?");
   }else{
-    setTime((int)tc.hour,(int)tc.min,(int)tc.sec,(int)tc.mday,(int)tc.mon,(int)tc.year ) ; // set the internal RTC
+    setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
     hasRTC = true ;
     Serial.println("Has RTC ?");
     rtc_temp = DS3231_get_treg(); 
-    DS3231_get(&tb);
+    DS3231_get(&tv.tb);
   }
   rtc_min = minute();
   rtc_sec = second();
-
 
   HT.begin(0x00);
   for (int led = 0; led < 127; led++) {
@@ -828,6 +462,15 @@ String host ;
   OTAWebUpdater.setup(&OTAWebServer);
   OTAWebServer.begin();  
   Serial.println("End of Setup");
+  delay(100);
+  if (tv.iUseGPS==1){
+    Serial.setDebugOutput(false);  
+    Serial.begin(9600);    // gps on serial port
+  }else{
+    Serial.begin(115200);
+    Serial.println("Warp Speed no GPS !");
+  }
+  lRebootCode = random(1,+2147483640) ;
 
 }
 
@@ -841,10 +484,7 @@ float sunInc;
 float sunAng;
 float xzRatio;
 float yzRatio;
-float decl ;
-float eqtime ;
 float dTmp ;
-float heading ;
 float tst ;
 float flat, flon;
 unsigned short goodsent;
@@ -859,25 +499,41 @@ bool bSendCtrlPacket = false ;
   lTime = millis() ;
 
   compass.read();  // this reads all 6 channels
+  tv.heading = compass.heading();    //(LSM303::vector<int>) { 1, 0, 0 }
 
   if (( compass.a.z != 0) && (!compass.timeoutOccurred() ))  {
-    zAng = (float)compass.a.z ;
-    if (iXYS == 0 ){                                            // Proper Job make it configurable 
-      xzRatio = (float)compass.a.x * xMul / abs(zAng) ;         // Normal
-      yzRatio = (float)compass.a.y * yMul / abs(zAng) ;
+    tv.zAng = (float)compass.a.z * tv.zMul ;
+    if (tv.iXYS == 0 ){                                            // Proper Job make it configurable 
+      xzRatio = (float)compass.a.x * tv.xMul / abs(tv.zAng) ;         // Normal   NS
+      yzRatio = (float)compass.a.y * tv.yMul / abs(tv.zAng) ;         //          EW
     }else{
-      xzRatio = (float)compass.a.y * xMul / abs(zAng) ;         // Swapped
-      yzRatio = (float)compass.a.x * yMul / abs(zAng) ;      
+      xzRatio = (float)compass.a.y * tv.xMul / abs(tv.zAng) ;         // Swapped  NS
+      yzRatio = (float)compass.a.x * tv.yMul / abs(tv.zAng) ;         //          EW  
     }
-    xzAng = ((float)atan(xzRatio) / PI * 180 ) + xzOffset ;     // good old offsets or fudge factors
-    yzAng = ((float)atan(yzRatio) / PI * 180 ) + yzOffset ;
+    tv.xzAng = ((float)atan(xzRatio) / PI * 180 ) + tv.xzOffset ;     // NS or Alt  Good old offsets or fudge factors added
+    if (tv.iMountType == 0){
+      tv.yzAng = ((float)atan(yzRatio) / PI * 180 ) + tv.yzOffset ;     // EW    
+    }else{
+      tv.yzAng = tv.heading + tv.yzOffset ;                             // Az          
+    }
+    xMag = compass.m.x ;
+    yMag = compass.m.y ;
+    zMag = compass.m.z ;
+    if ( bMagCal ){
+      running_min.x = min(running_min.x, compass.m.x);
+      running_min.y = min(running_min.y, compass.m.y);
+      running_min.z = min(running_min.z, compass.m.z);
+          
+      running_max.x = max(running_max.x, compass.m.x);
+      running_max.y = max(running_max.y, compass.m.y);
+      running_max.z = max(running_max.z, compass.m.z);
+    }
   }else{                                                        // try restarting the compass/accelerometer modual - cos he gone walkabout...
     Wire.begin();   // reset the I2C
     compass.init();
     compass.enableDefault();
     compass.setTimeout(1000);                                           // BTW I fixed up the int / long issue in the time out function in the LM303 lib I was using
-    compass.m_min = (LSM303::vector<int16_t>) {-3848, -1822, -1551 };   // calibration figures are empirical (just whirl it around a bit and records the min max !!)
-    compass.m_max = (LSM303::vector<int16_t>) { +3353, +5127, +5300 };
+    
   }
    
 //  digitalWrite(SCOPE_PIN,!digitalRead(SCOPE_PIN));  // my scope says we are doing this loop at an unreasonable speed except when we do web stuff
@@ -902,22 +558,22 @@ bool bSendCtrlPacket = false ;
 //      display.drawLine(minRow, 63, maxRow, 63);
     display.setTextAlignment(TEXT_ALIGN_LEFT);
     snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
-    display.drawString(0 , LineText, String(buff) );
+    display.drawString(0 , 0, String(buff) );
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.drawString(128 , LineText, String(WiFi.RSSI()));
+    display.drawString(128 , 0, String(WiFi.RSSI()));
     display.setTextAlignment(TEXT_ALIGN_LEFT);
 //    snprintf(buff, BUFF_MAX, "TX %d TY %d", year(), month() );
-    msg = "X  " + String(xzAng,2)  ;
+    msg = "X  " + String(tv.xzAng,2)  ;
     display.drawString(0 , 11, msg ) ;
-    msg = "Y  " + String(yzAng,2)  ;
+    msg = "Y  " + String(tv.yzAng,2)  ;
     display.drawString(56 , 11, msg ) ;
-    msg = "TX " + String(xzTarget,2) ;
+    msg = "TX " + String(tv.xzTarget,2) ;
     display.drawString(0 , 22, msg ) ;
-    msg = "TY " + String(yzTarget,2) ;
+    msg = "TY " + String(tv.yzTarget,2) ;
     display.drawString(56 , 22, msg ) ;
-    msg = "DX " + String((xzAng-xzTarget),2) ;
+    msg = "DX " + String((tv.xzAng-tv.xzTarget),2) ;
     display.drawString(0 , 33, msg ) ;
-    msg = "DY " + String((yzAng-yzTarget),2) ;
+    msg = "DY " + String((tv.yzAng-tv.yzTarget),2) ;
     display.drawString(56 , 33, msg ) ;
 
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
@@ -940,11 +596,11 @@ bool bSendCtrlPacket = false ;
 //    display.drawString(128 , 22, String(pwmtest)) ;
     
     display.setTextAlignment(TEXT_ALIGN_LEFT);
-    snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(sunrise), MinSolarTime(sunrise));
+    snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(tv.sunrise), MinSolarTime(tv.sunrise));
     display.drawString(0 , 44, buff ) ;
     
     display.setTextAlignment(TEXT_ALIGN_CENTER);
-    if (iDayNight == 1) {
+    if (tv.iDayNight == 1) {
       msg = " DAY " ;
     } else {
       msg = "NIGHT" ;
@@ -956,122 +612,180 @@ bool bSendCtrlPacket = false ;
     }
     display.drawString(64 , 44, msg ) ;
 
-    snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(sunset), MinSolarTime(sunset));
+    snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(tv.sunset), MinSolarTime(tv.sunset));
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
     display.drawString(128 , 44, buff ) ;
  
 
     display.setTextAlignment(TEXT_ALIGN_CENTER);
-    if ( bConfig ){
-      snprintf(buff, BUFF_MAX, ">> IP %03u.%03u.%03u.%03u <<", MyIP[0],MyIP[1],MyIP[2],MyIP[3]);
+    if (( rtc_sec & 0x2) == 0  ){
+      snprintf(buff, BUFF_MAX, ">> IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);
     }else{
-      snprintf(buff, BUFF_MAX, "IP %03u.%03u.%03u.%03u", MyIP[0],MyIP[1],MyIP[2],MyIP[3]);      
+      snprintf(buff, BUFF_MAX, "IP %03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
     }
     display.drawString(64 , 54 ,  String(buff) );
 
     display.display();
     if (( rtc_sec > 8 ) && ( rtc_sec < 58 )) {  // dont calculate arround the minute when time is updating from NTP or GPS as might get a not so funny result
       digitalWrite(LED,!digitalRead(LED));
-      solar_az_deg = SolarAzimouthRad(longitude, latitude, &tc, timezone) * 180 / PI ;
-      solar_el_deg = SolarElevationRad(longitude, latitude, &tc, timezone) * 180 / PI ;
+      tv.tc.year = year();   // get the time into the structure
+      tv.tc.mon = month() ;
+      tv.tc.mday = day();
+      tv.tc.hour = hour();
+      tv.tc.min = minute();
+      tv.tc.sec = second();
+      rtc_status = DS3231_get_sreg();  // hang the expense thow the cat another canary...
+
+      tv.solar_az_deg = SolarAzimouthRad(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone) * 180 / PI ;
+      tv.solar_el_deg = SolarElevationRad(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone) * 180 / PI ;
     
-      decl = Decl(gama(&tc)) * 180 / PI ;
-      ha = HourAngle (longitude , &tc , timezone )  ;
-      sunrise = Sunrise(longitude, latitude, &tc, timezone) ;
-      sunset = Sunset(longitude, latitude, &tc, timezone);
-      tst = TrueSolarTime(longitude, &tc, timezone);
-      sunX = abs(latitude) + decl ;
-      if (solar_el_deg >= 0 ){           // day
-        iDayNight = 1 ;
+      decl = Decl(gama(&tv.tc)) * 180 / PI ;
+      eqtime = eqTime(gama(&tv.tc)) ;
+      tv.ha = HourAngle (tv.longitude , &tv.tc , ghks.fTimeZone )  ;
+      tv.sunrise = Sunrise(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone) ;
+      tv.sunset = Sunset(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone);
+      tst = TrueSolarTime(tv.longitude, &tv.tc, ghks.fTimeZone);
+      tv.sunX = abs(tv.latitude) + decl ;
+      if (tv.solar_el_deg >= 0 ){           // day
+        tv.iDayNight = 1 ;
       }else{                             // night
-        iDayNight = 0 ;
+        tv.iDayNight = 0 ;
       }
     }
-    switch (iTrackMode) {
-      case 4: // both axis to park
-        yzTarget = dyPark ;  // night park position  E/W
-        xzTarget = dxPark ;  // night park position  N/S
-        break ;
-      case 3: // both axis off no tracking
-        break ;
-      case 2: // xz tracking  NS
-        if ( iDayNight == 1 ) {
-          xzTarget = sunX ; // need to map the coordinate system correctly
-        } else {
-          xzTarget = dxPark ;  // night park position
-        }
-        break;
-      case 1:  // yz tracking   EW
-        if (iDayNight == 1) {
-          yzTarget = ha ;
-        } else {
-          yzTarget = dyPark ;  // night park position
-        }
-        break;
-      case -1: // set target to tracking and park both at nigh
-        if (iDayNight == 1) {
-          yzTarget = ha ;
-          xzTarget = sunX ; // need to map the coordinate system correctly
-        } else {
-          yzTarget = dyPark ;  // night park position  E/W
-          xzTarget = dxPark ;  // night park position  N/S
-        }
-        break;
-      default: // set target to tracking
-        if (iDayNight == 1) {
-          yzTarget = ha ;
-          xzTarget = sunX ; // need to map the coordinate system correctly
-        } else {
-          yzTarget = dyPark ;  // night park position (dont park the other - leave till morning)
-        }
-        break;
-    }
-    xzTarget = constrain(xzTarget,xMinVal,xMaxVal);   // constain function... very cool - dont leave home without it !
-    yzTarget = constrain(yzTarget,yMinVal,yMaxVal);
 
+    if (tv.iMountType == 0){         // EQUITORIAL MOUNT
+      switch (tv.iTrackMode) {
+        case 4: // both axis to park
+          tv.yzTarget = tv.dyPark ;  // night park position  E/W
+          tv.xzTarget = tv.dxPark ;  // night park position  N/S
+          break ;
+        case 3: // both axis off no tracking
+          break ;
+        case 2: // xz tracking  NS
+          if ( tv.iDayNight == 1 ) {
+            tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
+          } else {
+            tv.xzTarget = tv.dxPark ;  // night park position
+          }
+          break;
+        case 1:  // yz tracking   EW
+          if (tv.iDayNight == 1) {
+            tv.yzTarget = tv.ha ;
+          } else {
+            tv.yzTarget = tv.dyPark ;  // night park position
+          }
+          break;
+        case -1: // set target to tracking and park both at nigh
+          if (tv.iDayNight == 1) {
+            tv.yzTarget = tv.ha ;
+            tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
+          } else {
+            tv.yzTarget = tv.dyPark ;  // night park position  E/W
+            tv.xzTarget = tv.dxPark ;  // night park position  N/S
+          }
+          break;
+        default: // set target to tracking
+          if (tv.iDayNight == 1) {
+            tv.yzTarget = tv.ha ;
+            tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
+          } else {
+            tv.yzTarget = tv.dyPark ;  // night park position (dont park the other - leave till morning)
+          }
+          break;
+      }
+      tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // NS   constain function... very cool - dont leave home without it !
+      tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW 
+    }else{
+      switch (tv.iTrackMode) {      // ALT/AZ MOUNT
+        case 4: // both axis to park
+          tv.yzTarget = tv.dyPark ;  // night park position  Az
+          tv.xzTarget = tv.dxPark ;  // night park position  Alt
+          break ;
+        case 3: // both axis off no tracking
+          break ;
+        case 2: // xz tracking  NS
+          if ( tv.iDayNight == 1 ) {
+            tv.xzTarget = tv.solar_el_deg ; // Alt  need to map the coordinate system correctly
+          } else {
+            tv.xzTarget = tv.dxPark ;       // Az   night park position
+          }
+          break;
+        case 1:  // yz tracking   EW
+          if (tv.iDayNight == 1) {
+            tv.yzTarget = tv.solar_az_deg ; // Az
+          } else {
+            tv.yzTarget = tv.dyPark ;       // Alt  night park position
+          }
+          break;
+        case -1: // set target to tracking and park both at nigh
+          if (tv.iDayNight == 1) {
+            tv.yzTarget = tv.solar_az_deg ; // Az
+            tv.xzTarget = tv.solar_el_deg ; // Alt  need to map the coordinate system correctly
+          } else {
+            tv.yzTarget = tv.dyPark ;  // night park position 
+            tv.xzTarget = tv.dxPark ;  // 
+          }
+          break;
+        default: // set target to tracking
+          if (tv.iDayNight == 1) {
+            tv.yzTarget = tv.solar_az_deg ; // Az 
+            tv.xzTarget = tv.solar_el_deg ; // Alt  need to map the coordinate system correctly
+          } else {
+            tv.yzTarget = tv.dyPark ;       // night park position (dont park the other - leave till morning)
+          }
+          break;
+      }
+      tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // Alt
+      tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // Az   
+    }
+    
     DisplayMeatBall() ;
-    heading = compass.heading((LSM303::vector<int>) { 1, 0, 0 });
 
     if ( hasGyro ){
       gyro.read();
-      xRoll = gyro.g.x ;
-      yRoll = gyro.g.y ;
-      zRoll = gyro.g.z ;
+      tv.xRoll = gyro.g.x ;
+      tv.yRoll = gyro.g.y ;
+      tv.zRoll = gyro.g.z ;
     }
     
-    if ( iDoSave == 2 ) {  // save them Active via web or 
+    if ( tv.iDoSave == 2 ) {  // save them Active via web or 
       LoadParamsFromEEPROM(false);
-      iDoSave = 0 ;  // only do once
+      tv.iDoSave = 0 ;  // only do once
     }
-    if ( iDoSave == 3 ) {  // load them
+    if ( tv.iDoSave == 3 ) {  // load them
       LoadParamsFromEEPROM(true);
-      iDoSave = 0 ;  // only do once
+      tv.iDoSave = 0 ;  // only do once
     }
   }
 
   if (rtc_hour != hour()){
-    bSendCtrlPacket = true ;
-    if ( !bConfig ) { // ie we have a network
-      sendNTPpacket(timeServer); // send an NTP packet to a time server  once and hour
+    if ( !bConfig ) {        // ie we have a network
+      if ( hour() == 0 ){    // once a day do this at midnight
+        sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour
+      }
+      if (( hour() == 23 ) && ( hasRTC )){    // once a day do this before midnight
+        DS3231_get(&tv.tc);
+        setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the chip internal RTC from the external one
+      }
     }else{
       if ( hasRTC ){
-        DS3231_get(&tc);
-        setTime((int)tc.hour,(int)tc.min,(int)tc.sec,(int)tc.mday,(int)tc.mon,(int)tc.year ) ; // set the internal RTC
+        DS3231_get(&tv.tc);
+        setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
       }
     }
     rtc_hour = hour(); 
   }
   if ( rtc_min != minute()){
     if (hasPres){
-      Pr = getPressure((float *)&gT) ;
+      tv.Pr = getPressure((float *)&tv.gT) ;
     }
     if (hasRTC) {
-      T = DS3231_get_treg();
+      tv.T = DS3231_get_treg();
     }
     
-    if (( year() < 1980 )|| (bDoTimeUpdate)) {  // not the correct time try to fix every minute
+    if (( year() < MINYEAR )|| (bDoTimeUpdate)) {  // not the correct time try to fix every minute
       if ( !bConfig ) { // ie we have a network
-        sendNTPpacket(timeServer); // send an NTP packet to a time server  
+        sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  
         bDoTimeUpdate = false ;
       }
     }
@@ -1080,20 +794,16 @@ bool bSendCtrlPacket = false ;
     }
     rtc_min = minute() ;
     gps.stats(&gpschars, &goodsent , &failcs );
-    gps.f_get_position(&flat, &flon,(long unsigned *) &fixage); // return in degrees
-    if ((fixage > 0 ) && ( fixage < 40000 )) {   // wait till our fix is valid before we use the values
-      iGPSLock = gps.satellites() ;
-      alt = gps.f_altitude() ;
+    gps.f_get_position(&flat, &flon,(long unsigned *) &tv.fixage); // return in degrees
+    if ((tv.fixage > 0 ) && ( tv.fixage < 40000 )) {   // wait till our fix is valid before we use the values
+      tv.iGPSLock = gps.satellites() ;
+      tv.alt = gps.f_altitude() ;
       if (iPowerUp==0) {   // only do this at startup so we have a better position ref for next time
-          if ( latitude != flat ){
-            latitude = flat ;
-            EEPROM.put(0 + (13 * sizeof(float)) , latitude );
-            EEPROM.commit();
+          if ( tv.latitude != flat ){
+            tv.latitude = flat ;
           }
-          if ( longitude != flon ){
-            longitude = flon ;
-            EEPROM.put(0 + (14 * sizeof(float)) , longitude );   
-            EEPROM.commit();     
+          if ( tv.longitude != flon ){
+            tv.longitude = flon ;
           }
           iPowerUp = 1 ;
           if (!hasNet ){
@@ -1101,13 +811,13 @@ bool bSendCtrlPacket = false ;
           }
       }
     }else{
-      iGPSLock = 0 ;   // if no lock loook at internal clock
+      tv.iGPSLock = 0 ;   // if no lock loook at internal clock
     }  
   }
 
-  if ( year() > 2000 ){ // dont move if date and time is rubbish
-    if (((tc.hour > 19 ) || ( tc.hour < 5 )) && (iTrackMode < 3)) {
-      if ( iNightShutdown != 0 ){
+  if ( year() > MINYEAR ){ // dont move if date and time is rubbish
+    if (((hour() > 19 ) || ( hour() < 5 )) && (tv.iTrackMode < 3)) {
+      if ( tv.iNightShutdown != 0 ){
         ActivateRelays(1) ;        
       }else{
         ActivateRelays(0) ;  // power down at night if in tracking mode
@@ -1135,100 +845,16 @@ bool bSendCtrlPacket = false ;
     Serial.println("Wrap around");
   }
 
-  if (iUseGPS!=0){
-    while (Serial.available()){ // process the gps buffer
+  if (tv.iUseGPS == 1 ){
+    while (Serial.available()){ // process the gps buffer from serial port
       gps.encode(Serial.read());
     }  
-  }
-  
+  }  
 //  dnsServer.processNextRequest();
 }   // ####################  BOTTOM OF LOOP  ###########################################
 
-float DayOfYear(uint16_t iYear , uint8_t iMon , uint8_t iDay , uint8_t iHour , uint8_t iMin ) {
-  int i ;
-  float iTDay ;
-
-  iTDay = iDay - 1 ;  // this is zero referenced
-  for ( i = 1 ; i < iMon ; i++ ) {
-    switch (i) {
-      case 1:
-      case 3:
-      case 5:
-      case 7:
-      case 8:
-      case 10:
-      case 12:
-        iTDay += 31 ;
-        break;
-      case 4:
-      case 6:
-      case 9:
-      case 11:
-        iTDay += 30 ;
-        break;
-      case 2 :
-        if ((iYear % 4) == 0 ) {
-          iTDay += 29 ;
-        } else {
-          iTDay += 28 ;
-        }
-        break;
-    }
-  }
-  iTDay += (( 1.0 * iHour - 12 ) / 24 ) ;
-  //  iDay +=  1.0 * iMin  / 1440 ;
-  return (iTDay);
-}
 
 
-int HrsSolarTime(float target) {
-  int i ;
-  i = target ;
-  return (  i / 60 );
-}
-int MinSolarTime(float target) {
-  int i ;
-  i = target  ;
-  return (   i % 60 );
-}
-
-float sign(float target) {
-  if (target > 0 ) {
-    return (1);
-  } else {
-    if (target < 0 ) {
-      return (-1);
-    } else {
-      return (0);
-    }
-  }
-}
-
-
-
-float getPressure(float* Temp)
-{
-  char status;
-  double T,P;
-
-  status = pressure.startTemperature();
-  if (status != 0){
-    delay(status);    // Wait for the measurement to complete:
-    status = pressure.getTemperature(T);
-    if (status != 0){
-      status = pressure.startPressure(3);
-      if (status != 0){
-        // Wait for the measurement to complete:
-        delay(status);
-        status = pressure.getPressure(P,T);
-        if (status != 0){ 
-          gT = T ;
-          return(float(P));
-        }
-      }
-    }
-  }
-}
 
 
 
