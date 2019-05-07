@@ -8,6 +8,9 @@ void i2cScan() {
 
   SendHTTPHeader();
 
+  server.sendContent(F("<a href='/'>Home</a><br>")) ;         
+  server.sendContent(F("<a href='/scan'>Rescan</a><br><br>")) ;         
+
   server.sendContent(F("<center><b>I2C Bus Scan</b><br><table border=1 title='I2C Bus Scan'><tr><th>.</th>"));
  // table header
   for (i = 0; i < 16; i++) {

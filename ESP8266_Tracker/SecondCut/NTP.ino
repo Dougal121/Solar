@@ -32,18 +32,21 @@ int oldyear ;
     unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
     unsigned long secsSince1900 = highWord << 16 | lowWord;                             // this is NTP time (seconds since Jan 1 1900):
     const unsigned long seventyYears = 2208988800UL;                                    // now convert NTP time into everyday time:     Unix time starts on Jan 1 1970. In seconds, that's 2208988800:   
-    unsigned long epoch = secsSince1900 - seventyYears + (timezone * SECS_PER_HOUR);   // subtract seventy years:
+    unsigned long epoch = secsSince1900 - seventyYears + (ghks.fTimeZone * SECS_PER_HOUR);   // subtract seventy years:
     setTime((time_t)epoch);                                                             // update the clock
     Serial.print(F("Unix time = "));
     Serial.println(epoch);                                                              // print Unix time:
-    tn.year = year();   // record the last NTP time set
-    tn.mon = month() ;
-    tn.mday = day();
-    tn.hour = hour();
-    tn.min = minute();
-    tn.sec = second();
+    tv.tn.year = year();   // record the last NTP time set
+    tv.tn.mon = month() ;
+    tv.tn.mday = day();
+    tv.tn.hour = hour();
+    tv.tn.min = minute();
+    tv.tn.sec = second();
     if (( !hasRTC ) && ( oldyear < 2000 )){
-      tb = tn ;
+      tv.tb = tv.tn ;
+    }
+    if (( hasRTC ) && ( year() > MINYEAR )) {
+        DS3231_set(tv.tn);                       // set the RTC if we have one and time looks non bullshit      
     }
 }
 
@@ -51,20 +54,20 @@ int SetTimeFromGPS(){
   byte hundredths ;
   time_t chiptime ;
   
-  gps.crack_datetime((int *)&tg.year,(byte *)&tg.mon,(byte *) &tg.mday,(byte *) &tg.hour,(byte *) &tg.min,(byte *) &tg.sec , &hundredths, &fixage);
-  setTime((int)tg.hour,(int)tg.min,(int)tg.sec,(int)tg.mday,(int)tg.mon,(int)tg.year ) ; // set the internal RTC from last GPS time  
+  gps.crack_datetime((int *)&tv.tg.year,(byte *)&tv.tg.mon,(byte *) &tv.tg.mday,(byte *) &tv.tg.hour,(byte *) &tv.tg.min,(byte *) &tv.tg.sec , &hundredths, &tv.fixage);
+  setTime((int)tv.tg.hour,(int)tv.tg.min,(int)tv.tg.sec,(int)tv.tg.mday,(int)tv.tg.mon,(int)tv.tg.year ) ; // set the internal RTC from last GPS time  
   chiptime = now() ;                          // get it back again
-  chiptime += (( timezone * SECS_PER_HOUR ) + ( fixage / 1000 )) ; // add the offset plus the fix age
+  chiptime += (( ghks.fTimeZone * SECS_PER_HOUR ) + ( tv.fixage / 1000 )) ; // add the offset plus the fix age
   setTime(chiptime);                         // set it again  
-   if (hasRTC) {
-      tg.year = year();
-      tg.mon = month() ;
-      tg.mday = day();
-      tg.hour = hour() ;
-      tg.min = minute();
-      tg.sec = second();
-      DS3231_set(tg);                          //should also update this
-    }
+  if ( hasRTC ) {
+      tv.tg.year = year();
+      tv.tg.mon = month() ;
+      tv.tg.mday = day();
+      tv.tg.hour = hour() ;
+      tv.tg.min = minute();
+      tv.tg.sec = second();
+      DS3231_set(tv.tg);                          //should also update this
+  }
   return(0);
 }
 

@@ -1,13 +1,26 @@
 
 void DisplayMeatBall() {
   int  pos , led , x , y;
-  float dx , dy ;
+  float dx , dy , dt ;
   float dxa , dya ;
 
   HT.setBrightness(15);
 
-  dx = xzAng - xzTarget ;
-  dy = yzAng - yzTarget ;
+//  if ( tv.xMul > 0 ) {
+    dx = tv.xzAng - tv.xzTarget ;    // NS
+//  }else{
+//    dx = tv.xzTarget - tv.xzAng  ;   // NS     reverse
+//  }
+//  if ( tv.yMul > 0 ) {
+    dy = tv.yzAng - tv.yzTarget ;    // EW
+//  }else{
+//    dy = tv.yzTarget - tv.yzAng  ;   // EW     reverse    
+//  }
+/*  if ( tv.iXYS != 0 ){               //  swap mount orientation so spin around display
+    dt = dx ;
+    dx = dy ;
+    dy = dt ;
+  }*/
   dxa = abs(dx) ;
   dya = abs(dy) ;
   if (dxa < 6) {
@@ -61,7 +74,7 @@ void DisplayMeatBall() {
   //  HT.setLedNow(MapLedNo(tc.sec));
   if ((iPWM_YZ == 0) && (iPWM_XZ == 0)) {
     HT.setBlinkRate(HT16K33_DSP_NOBLINK); // not attempting to move
-    if (tc.sec % 2 == 0 ) {
+    if (second() % 2 == 0 ) {
       HT.setLed(MapLedNo(pos + 0)); // display the meatball
       HT.setLed(MapLedNo(pos + 9));
     }else{
