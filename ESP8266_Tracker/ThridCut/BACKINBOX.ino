@@ -58,7 +58,7 @@ void BackIntheBoxMemory(){
   tv.latitude = 47.8289 ;
   tv.longitude = 20.1173 ;
 
-  ghks.fTimeZone = 10.0 ;  
+  ghks.fTimeZone = 1.0 ;  
   tv.xMul = 1.0 ;  
   tv.yMul = 1.0 ;  
   tv.zMul = 1.0 ;  
