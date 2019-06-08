@@ -276,12 +276,20 @@ void handleRoot() {
       }
     }       
     i = String(server.argName(j)).indexOf("nisht");
-    if (i != -1){  // have a request to set the time zone
+    if (i != -1){  // night time shutdown
       tv.iNightShutdown = String(server.arg(j)).toInt() ;
       if (( tv.iNightShutdown < 0) || ( tv.iNightShutdown > 1 )){
         tv.iNightShutdown = 0 ;
       }
     }            
+    i = String(server.argName(j)).indexOf("tmsrc");
+    if (i != -1){  // time source
+      tv.iTimeSource = String(server.arg(j)).toInt() ;
+      if (( tv.iTimeSource < 0) || ( tv.iTimeSource > 1 )){
+        tv.iTimeSource = 1 ;
+      }
+    }            
+
     i = String(server.argName(j)).indexOf("mltdr");
     if (i != -1){  // have a request to set the time zone
       tv.iMultiDrive = String(server.arg(j)).toInt() ;
@@ -741,7 +749,7 @@ void handleRoot() {
     server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
 
 
-    server.sendContent(F("<form method=get action=/><tr><td>Output Electronics</td><td align=center>")) ; 
+    server.sendContent(F("<form method=get action=/><tr><td>Motor Drive Electrics</td><td align=center>")) ; 
     server.sendContent(F("<select name='outpt'>"));
     switch (tv.iOutputType){
       case 0:     
@@ -808,14 +816,15 @@ void handleRoot() {
     }
     server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
 
-    server.sendContent(F("<form method=get action=/><tr><td>Time Source</td><td align=center>")) ; 
+
+    server.sendContent(F("<form method=get action=/><tr><td>Auto Time Updates</td><td align=center>")) ; 
     server.sendContent(F("<select name='tmsrc'>"));
-    if (tv.iMultiDrive == 0 ){
-      server.sendContent(F("<option value='1' SELECTED>1 DS3RTC")); 
-      server.sendContent(F("<option value='2'>2 NTP")); 
+    if (tv.iTimeSource == 0 ){
+      server.sendContent(F("<option value='0' SELECTED>0 Update From RTC every Hour")); 
+      server.sendContent(F("<option value='1'>1 Update from NTP Every 24 Hrs")); 
     }else{
-      server.sendContent(F("<option value='0'>0 One Axis at a Time")); 
-      server.sendContent(F("<option value='1' SELECTED>1 Both axis active at once")); 
+      server.sendContent(F("<option value='0'>0 Update From RTC every Hour")); 
+      server.sendContent(F("<option value='1' SELECTED>1 Update from NTP Every 24 Hrs")); 
     }
     server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
 

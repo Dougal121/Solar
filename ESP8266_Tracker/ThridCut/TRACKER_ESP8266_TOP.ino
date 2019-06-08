@@ -80,7 +80,7 @@ const byte RELAY_YZ_PWM = D6; // PWM 2    Speed East / West       Was the Y+ W r
 const byte RELAY_YZ_DIR = D7; // DIR 2    Y+ Y- East / West       Was the Y- E relay  Yellow
 const byte RELAY_XZ_DIR = D8; // DIR 1    X+ X-  North / South    Was the X+ N relay  Brown
 
-
+#define MINUTESPERDAY 1440
 
 static bool hasSD = false;
 static bool hasNet = false;
@@ -227,6 +227,7 @@ bool bConfig = false ;
 uint8_t rtc_status ;
 float decl ;
 float eqtime ;
+bool iOutputActive = 0 ;
 
 bool bMagCal = false ;
 bool bDoTimeUpdate = false ;
@@ -500,6 +501,7 @@ void loop() {
 long lTime ;  
 long lRet ;
 int i , j , k  ;
+int iSunUp , iSunDn ;
 float P;
 float sunInc;
 float sunAng;
@@ -605,18 +607,22 @@ bool bSendCtrlPacket = false ;
     display.drawString(56 , 33, msg ) ;
 
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    msg = "" ;
+    if ( iOutputActive == 0 ) {
+      msg = "" ;
+    }else{
+      msg = "-X-" ;      
+    }
     if ((tv.iOutputType & 0x02 ) == 0 ){  // both breads of PWM
       if ( iPWM_YZ != 0 ) {
         if (( digitalRead(RELAY_YZ_DIR) == LOW )) {
-          msg = "W" ;
+          msg += "W" ;     // will become Az
         }else{
-          msg = "E" ;            
+          msg += "E" ;            
         }
       }
       if ( iPWM_XZ != 0 ) {
         if (( digitalRead(RELAY_XZ_DIR) == LOW )) {
-          msg += "N" ;
+          msg += "N" ;     // will become Alt
         }else{
           msg += "S" ;            
         }
@@ -807,19 +813,26 @@ bool bSendCtrlPacket = false ;
   }
 
   if (rtc_hour != hour()){
-    if ( !bConfig ) {        // ie we have a network
-      if ( hour() == 0 ){    // once a day do this at midnight
-        sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour
-      }
-      if (( hour() == 23 ) && ( hasRTC )){    // once a day do this before midnight
-        DS3231_get(&tv.tc);
-        setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the chip internal RTC from the external one
-      }
-    }else{
+    if ( tv.iTimeSource == 0 ){ // just use the RTC
       if ( hasRTC ){
         DS3231_get(&tv.tc);
         setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
-      }
+      }       
+    }else{
+      if ( !bConfig ) {        // ie we have a network
+        if ( hour() == 0 ){    // once a day do this at midnight
+          sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour
+        }
+        if (( hour() == 23 ) && ( hasRTC )){    // once a day do this before midnight
+          DS3231_get(&tv.tc);
+          setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the chip internal RTC from the external one
+        }
+      }else{
+        if ( hasRTC ){
+          DS3231_get(&tv.tc);
+          setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
+        }
+      }     
     }
     rtc_hour = hour(); 
   }
@@ -864,18 +877,22 @@ bool bSendCtrlPacket = false ;
   }
 
   if ( year() > MINYEAR ){ // dont move if date and time is rubbish
-    if (((hour() > 19 ) || ( hour() < 5 )) && (tv.iTrackMode < 3)) {
+    iSunUp = HrsSolarTime(tv.sunrise) ;
+    iSunDn = HrsSolarTime(tv.sunset) ;
+    if (((((hour() > min(iSunDn ,22) ) || ( hour() < max(iSunUp,1) )) && ( iSunUp < iSunDn ))  || (((hour() < min(iSunUp ,22) ) && ( hour() > max(iSunDn,1) )) && ( iSunUp > iSunDn ))) && (tv.iTrackMode < 3)) {    
       if ( tv.iNightShutdown != 0 ){
-        ActivateRelays(1) ;    // maintain power for positioning but have night angles selected earler in code    
+        iOutputActive = 1 ;   // maintain power for positioning but have night angles selected earler in code    
       }else{
-        ActivateRelays(0) ;  // power down at night if in shutdown mode
+        iOutputActive = 0 ;   // power down at night if in shutdown mode
       }
     }else{
-      ActivateRelays(1) ; // normal path for tracking   
+      iOutputActive = 1 ;     // normal path for tracking   
     }
+    
   }else{
-    ActivateRelays(0) ;  // power down 
+    iOutputActive = 0 ;       // power down 
   }
+  ActivateRelays(iOutputActive) ;  // Send the command
   
   if (second() > 4 ){
     if ( ntpudp.parsePacket() ) {

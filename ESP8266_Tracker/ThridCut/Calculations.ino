@@ -53,14 +53,33 @@ float HA (float lat , struct ts *tm ) {
   return ( acos((cos(90.833 * PI / 180 ) / ( cos(latRad) * cos(Decl(gama(tm)))) - (tan(latRad) * tan(Decl(gama(tm)))))) / PI * 180  );
 }
 
-float Sunrise(float longitude , float lat , struct ts *tm , float timezone) {
-  return (720 - ( 4.0 * (longitude + HA(lat, tm))) + (60 * timezone) - eqTime(gama(tm))  ) ;
+float Sunrise(float longitude , float lat , struct ts *tm , float timezone) {   // outputs in minutes
+float fTmp ;
+  fTmp = 720 - ( 4.0 * (longitude + HA(lat, tm))) + (60 * timezone) - eqTime(gama(tm))  ;
+  if ( fTmp > MINUTESPERDAY )
+    fTmp -= MINUTESPERDAY ;
+  if ( fTmp < 0 )  
+    fTmp += MINUTESPERDAY ;
+  return (fTmp) ;
 }
-float Sunset(float longitude , float lat , struct ts *tm , float timezone) {
-  return (720 - ( 4.0 * (longitude - HA(lat, tm))) + (60 * timezone) - eqTime(gama(tm))  ) ;
+
+float Sunset(float longitude , float lat , struct ts *tm , float timezone) {   // outputs in minutes
+float fTmp ;
+  fTmp = 720 - ( 4.0 * (longitude - HA(lat, tm))) + (60 * timezone) - eqTime(gama(tm)) ;
+  if ( fTmp > MINUTESPERDAY )
+    fTmp -= MINUTESPERDAY ;
+  if ( fTmp < 0 )  
+    fTmp += MINUTESPERDAY ;
+  return (fTmp) ;
 }
-float SNoon(float longitude , float lat , struct ts *tm , float timezone) {
-  return (720 - ( 4.0 * (longitude  + (60 * timezone) - eqTime(gama(tm))))  ) ;
+float SNoon(float longitude , float lat , struct ts *tm , float timezone) {    // outputs in minutes
+float fTmp ;
+  fTmp = 720 - ( 4.0 * (longitude  + (60 * timezone) - eqTime(gama(tm)))) ;
+  if ( fTmp > MINUTESPERDAY )
+    fTmp -= MINUTESPERDAY ;
+  if ( fTmp < 0 )  
+    fTmp += MINUTESPERDAY ;
+  return (fTmp) ;
 }
 
 float SolarZenithRad(float longitude , float lat , struct ts *tm , float timezone) {
