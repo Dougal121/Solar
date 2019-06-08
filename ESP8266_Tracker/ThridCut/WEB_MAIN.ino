@@ -294,7 +294,12 @@ void handleRoot() {
     if (i != -1){  // have a request to set the time zone
       tv.iMountType = String(server.arg(j)).toInt() ;
       tv.iMountType = constrain(tv.iMountType,0,1);
-    }            
+    }         
+    i = String(server.argName(j)).indexOf("outpt");
+    if (i != -1){  // have a request to set the time zone
+      tv.iOutputType = String(server.arg(j)).toInt() ;
+      tv.iOutputType = constrain(tv.iOutputType,0,3);
+    }               
     i = String(server.argName(j)).indexOf("winds");
     if (i != -1){  // have a request to set the time zone
       tv.iMaxWindSpeed = String(server.arg(j)).toInt() ;
@@ -735,6 +740,37 @@ void handleRoot() {
     }
     server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
 
+
+    server.sendContent(F("<form method=get action=/><tr><td>Output Electronics</td><td align=center>")) ; 
+    server.sendContent(F("<select name='outpt'>"));
+    switch (tv.iOutputType){
+      case 0:     
+        server.sendContent(F("<option value='0' SELECTED>0 STANDARD PWM / DIR ")); 
+        server.sendContent(F("<option value='1'>1 L298 IN1 IN2")); 
+        server.sendContent(F("<option value='2'>2 RELAY FWD / REV Active Low")); 
+        server.sendContent(F("<option value='3'>3 RELAY FWD / REV Active High")); 
+      break;
+      case 1:     
+        server.sendContent(F("<option value='0'>0 STANDARD PWM / DIR ")); 
+        server.sendContent(F("<option value='1' SELECTED>1 L298 IN1 IN2")); 
+        server.sendContent(F("<option value='2'>2 RELAY FWD / REV Active Low")); 
+        server.sendContent(F("<option value='3'>3 RELAY FWD / REV Active High")); 
+      break;
+      case 2:     
+        server.sendContent(F("<option value='0'>0 STANDARD PWM / DIR ")); 
+        server.sendContent(F("<option value='1'>1 L298 IN1 IN2")); 
+        server.sendContent(F("<option value='2' SELECTED>2 RELAY FWD / REV Active Low")); 
+        server.sendContent(F("<option value='3'>3 RELAY FWD / REV Active High")); 
+      break;
+      case 3:     
+        server.sendContent(F("<option value='0'>0 STANDARD PWM / DIR ")); 
+        server.sendContent(F("<option value='1'>1 L298 IN1 IN2")); 
+        server.sendContent(F("<option value='2'>2 RELAY FWD / REV Active Low")); 
+        server.sendContent(F("<option value='3' SELECTED>3 RELAY FWD / REV Active High")); 
+      break;
+    }  
+    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+
     server.sendContent(F("<form method=get action=/><tr><td>Tracker Name</td><td align=center><input type='text' name='tname' value='"));
     server.sendContent(String(tv.trackername)) ; 
     server.sendContent(F("' size=16 maxlength=16><input type='hidden' name='dummy' value='0'></td><td><input type='submit' value='SET'></td></tr></form>"));
@@ -771,6 +807,18 @@ void handleRoot() {
       server.sendContent(F("<option value='1' SELECTED>1 Alt/Az")); 
     }
     server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+
+    server.sendContent(F("<form method=get action=/><tr><td>Time Source</td><td align=center>")) ; 
+    server.sendContent(F("<select name='tmsrc'>"));
+    if (tv.iMultiDrive == 0 ){
+      server.sendContent(F("<option value='1' SELECTED>1 DS3RTC")); 
+      server.sendContent(F("<option value='2'>2 NTP")); 
+    }else{
+      server.sendContent(F("<option value='0'>0 One Axis at a Time")); 
+      server.sendContent(F("<option value='1' SELECTED>1 Both axis active at once")); 
+    }
+    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+
 
     server.sendContent(F("<form method=get action=/><tr><td>Max Wind Speed</td><td align=center><input type='text' name='winds' value='")) ; 
     server.sendContent(String(tv.iMaxWindSpeed));

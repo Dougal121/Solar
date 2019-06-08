@@ -26,6 +26,7 @@ byte packetBuffer[ NTP_PACKET_SIZE];     //buffer to hold incoming and outgoing 
 
 unsigned long processNTPpacket(void){
 int oldyear ;
+unsigned long lNowTime;
     oldyear = year() ;  
     ntpudp.read(packetBuffer, NTP_PACKET_SIZE);                                         // the timestamp starts at byte 40 of the received packet and is four bytes, or two words, long. First, esxtract the two words:
     unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);                  // combine the four bytes (two words) into a long integer
@@ -33,20 +34,26 @@ int oldyear ;
     unsigned long secsSince1900 = highWord << 16 | lowWord;                             // this is NTP time (seconds since Jan 1 1900):
     const unsigned long seventyYears = 2208988800UL;                                    // now convert NTP time into everyday time:     Unix time starts on Jan 1 1970. In seconds, that's 2208988800:   
     unsigned long epoch = secsSince1900 - seventyYears + (ghks.fTimeZone * SECS_PER_HOUR);   // subtract seventy years:
-    setTime((time_t)epoch);                                                             // update the clock
-    Serial.print(F("Unix time = "));
-    Serial.println(epoch);                                                              // print Unix time:
-    tv.tn.year = year();   // record the last NTP time set
-    tv.tn.mon = month() ;
-    tv.tn.mday = day();
-    tv.tn.hour = hour();
-    tv.tn.min = minute();
-    tv.tn.sec = second();
-    if (( !hasRTC ) && ( oldyear < 2000 )){
-      tv.tb = tv.tn ;
-    }
-    if (( hasRTC ) && ( year() > MINYEAR )) {
-        DS3231_set(tv.tn);                       // set the RTC if we have one and time looks non bullshit      
+    lNowTime = (unsigned long) now();
+    Serial.print(F("Network Unix time = "));
+    Serial.println(epoch);                                                              // print network Unix time:
+    Serial.print(F("Arduino Unix time = "));
+    Serial.println(lNowTime);                                                           // print arduino Unix time:
+    if (( abs(lNowTime-epoch) < 1200 ) || ( bNTPFirst )) {                              // only updae if within 20 min of our current lock    
+      bNTPFirst = false ;
+      setTime((time_t)epoch);                                                           // update the clock
+      tv.tn.year = year();                                                              // record the last NTP time set
+      tv.tn.mon = month() ;
+      tv.tn.mday = day();
+      tv.tn.hour = hour();
+      tv.tn.min = minute();
+      tv.tn.sec = second();
+      if (( !hasRTC ) && ( oldyear < 2000 )){
+        tv.tb = tv.tn ;
+      }
+      if (( hasRTC ) && ( year() > MINYEAR )) {
+          DS3231_set(tv.tn);                       // set the RTC if we have one and time looks non bullshit      
+      }
     }
 }
 

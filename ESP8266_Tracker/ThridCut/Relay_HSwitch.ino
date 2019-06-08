@@ -7,7 +7,20 @@ void StopXZ(){
   tv.motor_recycle_x = MOTOR_DWELL ;
 }
 
-void ActivateRelays(int iAllStop) {
+void ActivateOutput(int iAllStop) {
+    switch (tv.iOutputType){
+      case 0: //  PWM/DIR     Nomal PWM board
+      case 1: //  L298        IN1 IN2 ( EN tied high )
+        ActivatePWMDIR(iAllStop) ;        // now refactored with crispy bits and red wine
+      break;
+      case 2: // active high and low combinations ( code recued from the original part one tracker )    
+      case 3:     
+        ActivateRelays(iAllStop) ;     
+      break;
+    }  
+}
+
+void ActivatePWMDIR(int iAllStop) {
   if (tv.motor_recycle_y > 0 ){
     tv.motor_recycle_y-- ;
   }
@@ -76,7 +89,101 @@ void ActivateRelays(int iAllStop) {
     StopXZ();
     StopYZ();
   }
-  analogWrite(RELAY_XZ_PWM,iPWM_XZ);
-  analogWrite(RELAY_YZ_PWM,iPWM_YZ);
+//  analogWrite(RELAY_XZ_PWM,iPWM_XZ);
+//  analogWrite(RELAY_YZ_PWM,iPWM_YZ);
+  if (( digitalRead(RELAY_XZ_DIR) == LOW ) || ( (tv.iOutputType & 0x01 ) == 0 )) {
+    analogWrite(RELAY_XZ_PWM,iPWM_XZ);
+  }else{
+    analogWrite(1023-RELAY_XZ_PWM,iPWM_XZ);    
+  }
+  if (( digitalRead(RELAY_XZ_DIR) == LOW )  || ( (tv.iOutputType & 0x01 ) == 0 )) {
+    analogWrite(RELAY_YZ_PWM,iPWM_YZ);
+  }else{
+    analogWrite(1023-RELAY_YZ_PWM,iPWM_YZ);      
+  }
+
+
 }
+
+void ActivateRelays(int iAllStop) {
+int iEIN ; // ON - Active
+int iAUS ; // OFF - Inactive 
+  
+  if ((tv.iOutputType & 0x01 ) == 0 ){  // active low relays (usually
+    iEIN = LOW ;
+    iAUS = HIGH ;
+  }else{               // active high relays
+    iEIN = HIGH ;
+    iAUS = LOW   ; 
+  }
+  if (tv.motor_recycle_y > 0 ){
+    tv.motor_recycle_y-- ;
+  }
+  if (tv.motor_recycle_x > 0 ){
+    tv.motor_recycle_x-- ;
+  }
+  if ( iAllStop == 0 ) {
+    digitalWrite(RELAY_YZ_DIR, iAUS) ;
+    digitalWrite(RELAY_YZ_PWM, iAUS) ;
+    digitalWrite(RELAY_XZ_DIR, iAUS) ;
+    digitalWrite(RELAY_XZ_PWM, iAUS) ;
+  } else {
+    if (( digitalRead(RELAY_YZ_DIR) == iAUS ) && ( digitalRead(RELAY_YZ_PWM) == iAUS ) && (tv.motor_recycle_y == 0 )){
+      if ((( tv.yzAng  ) < ( tv.yzTarget - tv.yzH )) && ( digitalRead(RELAY_YZ_DIR) == iAUS )) {   // do Y ie E/W before N/S
+        digitalWrite(RELAY_YZ_DIR, iEIN) ;
+        digitalWrite(RELAY_YZ_PWM, iAUS) ;
+      }
+      if ((( tv.yzAng ) > ( tv.yzTarget + tv.yzH )) && ( digitalRead(RELAY_YZ_PWM) == iAUS )) {
+        digitalWrite(RELAY_YZ_DIR, iAUS) ;
+        digitalWrite(RELAY_YZ_PWM, iEIN) ;
+      }
+    }
+    if ((tv.yzAng > tv.yzTarget) && ( digitalRead(RELAY_YZ_DIR)==iEIN )) {
+      digitalWrite(RELAY_YZ_DIR, iAUS) ;
+      digitalWrite(RELAY_YZ_PWM, iAUS) ;
+      tv.motor_recycle_y = MOTOR_DWELL ;
+    }
+    if ((tv.yzAng < tv.yzTarget) && ( digitalRead(RELAY_YZ_PWM)==iEIN )) {
+      digitalWrite(RELAY_YZ_DIR, iAUS) ;
+      digitalWrite(RELAY_YZ_PWM, iAUS) ;
+      tv.motor_recycle_y = MOTOR_DWELL ;
+    }
+
+    if (( tv.iMultiDrive == 1 ) || (( digitalRead(RELAY_YZ_DIR) == iAUS ) && ( digitalRead(RELAY_YZ_PWM) == iAUS ))  ) {  // if finished on E/W you can do N/S  or if we are doing multidrive
+        if ( tv.motor_recycle_x == 0 ){
+          if ((tv.xzAng < ( tv.xzTarget - tv.xzH )) && ( digitalRead(RELAY_XZ_DIR) == iAUS ))  { // turn on if not in tolerance
+            digitalWrite(RELAY_XZ_DIR, iEIN) ;
+            digitalWrite(RELAY_XZ_PWM, iAUS) ;
+          }
+          if ((tv.xzAng > ( tv.xzTarget + tv.xzH )) && ( digitalRead(RELAY_XZ_PWM) == iAUS ) ) { // turn on if not in tolerance
+            digitalWrite(RELAY_XZ_DIR, iAUS) ;
+            digitalWrite(RELAY_XZ_PWM, iEIN) ;
+          }
+        }
+    }else{
+      if ((digitalRead(RELAY_XZ_PWM) == iEIN ) || (digitalRead(RELAY_XZ_PWM) == iEIN )){
+        digitalWrite(RELAY_XZ_DIR, iAUS) ;
+        digitalWrite(RELAY_XZ_PWM, iAUS) ;
+        tv.motor_recycle_x = MOTOR_DWELL ;
+      }
+    }
+    if ((tv.xzAng > tv.xzTarget ) && ( digitalRead(RELAY_XZ_DIR)==iEIN ))  { // if on turn off
+      digitalWrite(RELAY_XZ_DIR, iAUS) ;
+      digitalWrite(RELAY_XZ_PWM, iAUS) ;
+      tv.motor_recycle_x = MOTOR_DWELL ;
+    }
+    if ((tv.xzAng < tv.xzTarget ) && ( digitalRead(RELAY_XZ_PWM)==iEIN ))  { // if on turn off
+      digitalWrite(RELAY_XZ_DIR, iAUS) ;
+      digitalWrite(RELAY_XZ_PWM, iAUS) ;
+      tv.motor_recycle_x = MOTOR_DWELL ;
+    }
+  }
+  if (tv.iTrackMode==5){                // need a dont go anywhere mode  
+    digitalWrite(RELAY_XZ_DIR, iAUS) ;
+    digitalWrite(RELAY_XZ_PWM, iAUS) ;
+    digitalWrite(RELAY_YZ_DIR, iAUS) ;
+    digitalWrite(RELAY_YZ_PWM, iAUS) ;
+  }
+}
+
 

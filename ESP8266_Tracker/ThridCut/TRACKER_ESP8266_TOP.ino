@@ -89,8 +89,8 @@ static bool hasRTC = false;
 static bool hasPres = false ;
 
 char dayarray[8] = {'S','M','T','W','T','F','S','E'} ;
-char Toleo[10] = {"Ver 3.7\0"}  ;
-
+char Toleo[10] = {"Ver 3.8\0"}  ;
+#define LVER 3
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
   unsigned int localPort = 2390;          // 2 local port to listen for NTP UDP packets
@@ -189,7 +189,7 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int iTrackMode ;         //  
   int iMode ;              // 
   int iMaxWindSpeed ;      //  max speeed  - set to zero to disable
-  int iMountType ;         //  0 - for Equitorial Mount         1 -  for Alt / Az Mount
+  int iMountType ;         //  0 - for Equitorial Mount  1 -  for Alt / Az Mount
   int iMaxWindTime ; 
   int iMinWindTime ; 
   float dyParkWind ;       //  parking position
@@ -198,10 +198,15 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int yMaxMotorSpeed ;    // maximum motor speed
   LSM303::vector<int16_t> mag_min ;
   LSM303::vector<int16_t> mag_max ;
+  int iOutputType ;         //  
+  int iTimeSource ;         //  
+  int iWindInputSource ;         //  
+  float fWindSpeedCal  ;         //  
 } tracker_stuff_t ;        // 
 
 tracker_stuff_t   tv   ;    // tracker variables
 
+bool bNTPFirst = false ; 
 int iPMode;
 int iPWM_YZ ;
 int iPWM_XZ ;
@@ -242,6 +247,8 @@ ESP8266HTTPUpdateServer OTAWebUpdater;
 void setup() {
 int i , j = 0; 
 String host ;
+
+  bNTPFirst = true ;
   bSaveReq = 0 ;
   Serial.begin(115200);           // sert same as upload so less issues with serial monitor being open
   Serial.setDebugOutput(true);    // we will switch this off later in the setup
@@ -254,7 +261,7 @@ String host ;
   LoadParamsFromEEPROM(true);
 
   Serial.println(ghks.cssid[0]);
-  if (( ghks.cssid[0] == 0x00 ) || ( ghks.cssid[0] == 0xff ) || ( ghks.lVersion != 2 )){   // pick a default setup ssid if none
+  if (( ghks.cssid[0] == 0x00 ) || ( ghks.cssid[0] == 0xff ) || ( ghks.lVersion != LVER )){   // pick a default setup ssid if none
     Serial.println("Blank Memory - Resetting Memory to Defaults");
     BackIntheBoxMemory();           // blank memory detector - cssid should be a roach motel... once set should stay that way
   }
@@ -333,7 +340,10 @@ String host ;
   display.drawString(0, 11, "Chip ID " + String(ESP.getChipId(), HEX) );
   display.display();
 
-
+//  sprintf(ghks.nssid,"WLAN-PLUMMER\0") ;
+//  sprintf(ghks.npassword,"cheegh5S\0") ;
+//  sprintf(ghks.nssid,"TP-LINK_52FC8C\0");
+//  sprintf(ghks.npassword,"0052FC8C\0");
 
   WiFi.disconnect();
   Serial.println("Configuring soft access point...");
@@ -836,12 +846,12 @@ bool bSendCtrlPacket = false ;
   if ( year() > MINYEAR ){ // dont move if date and time is rubbish
     if (((hour() > 19 ) || ( hour() < 5 )) && (tv.iTrackMode < 3)) {
       if ( tv.iNightShutdown != 0 ){
-        ActivateRelays(1) ;        
+        ActivateRelays(1) ;    // maintain power for positioning but have night angles selected earler in code    
       }else{
-        ActivateRelays(0) ;  // power down at night if in tracking mode
+        ActivateRelays(0) ;  // power down at night if in shutdown mode
       }
     }else{
-      ActivateRelays(1) ;    
+      ActivateRelays(1) ; // normal path for tracking   
     }
   }else{
     ActivateRelays(0) ;  // power down 

@@ -1,7 +1,7 @@
 void BackIntheBoxMemory(){
   uint8_t i , j ;
 
-  ghks.lVersion = 2 ;
+  ghks.lVersion = LVER ;
   
   for ( i = 0 ; i < sizeof(ghks.npassword) ; i++ ){     
     ghks.npassword[i] = 0 ;  
@@ -58,7 +58,7 @@ void BackIntheBoxMemory(){
   tv.latitude = 47.8289 ;
   tv.longitude = 20.1173 ;
 
-  ghks.fTimeZone = 1.0 ;  
+  ghks.fTimeZone = 10.0 ;  
   tv.xMul = 1.0 ;  
   tv.yMul = 1.0 ;  
   tv.zMul = 1.0 ;  
@@ -70,6 +70,10 @@ void BackIntheBoxMemory(){
   tv.iMaxWindTime = 15 ;    // 15 seconds of max speed parks the arrray
   tv.iMinWindTime = 180 ;   // 180 secodns to resume tracking 
   tv.iMountType = 0 ;       // equitorial
+  tv.iOutputType = 0 ;      // Output circuit type 
+  tv.iTimeSource = 0 ;
+  tv.fWindSpeedCal = 1.0 ;
+  tv.iWindInputSource = 0 ;
   ghks.MyIPC = IPAddress(192,168,5 +(ESP.getChipId() & 0x7f ) ,1);
   tv.xMaxMotorSpeed = MAX_MOTOR_PWM ;
   tv.yMaxMotorSpeed = MAX_MOTOR_PWM ;
@@ -140,7 +144,7 @@ int eeAddress ;
       tv.yMaxMotorSpeed = MAX_MOTOR_PWM ;
     }
     tv.iMountType = constrain(tv.iMountType,0,1);
-    
+    tv.iOutputType = constrain(tv.iOutputType,0,3);
     tv.iNightShutdown = constrain(tv.iNightShutdown,0,1);
     tv.iMultiDrive = constrain(tv.iMultiDrive,0,1);
 
