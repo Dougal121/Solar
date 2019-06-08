@@ -511,7 +511,7 @@ float flat, flon;
 unsigned short goodsent;
 unsigned short failcs;
 String msg ;
-
+int iRelayActiveState ;
 bool bSendCtrlPacket = false ;
 
   server.handleClient();
@@ -606,20 +606,40 @@ bool bSendCtrlPacket = false ;
 
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
     msg = "" ;
-    if ( iPWM_YZ != 0 ) {
-      if (( digitalRead(RELAY_YZ_DIR) == LOW )) {
-        msg = "W" ;
-      }else{
-        msg = "E" ;            
+    if ((tv.iOutputType & 0x02 ) == 0 ){  // both breads of PWM
+      if ( iPWM_YZ != 0 ) {
+        if (( digitalRead(RELAY_YZ_DIR) == LOW )) {
+          msg = "W" ;
+        }else{
+          msg = "E" ;            
+        }
       }
-    }
-    if ( iPWM_XZ != 0 ) {
-      if (( digitalRead(RELAY_XZ_DIR) == LOW )) {
+      if ( iPWM_XZ != 0 ) {
+        if (( digitalRead(RELAY_XZ_DIR) == LOW )) {
+          msg += "N" ;
+        }else{
+          msg += "S" ;            
+        }
+      } 
+    }else{                   // using relays
+      if ((tv.iOutputType & 0x01 ) == 0 ){ //active low
+        iRelayActiveState = LOW ;
+      }else{   // active high
+        iRelayActiveState = HIGH ;
+      }      
+      if (( digitalRead(RELAY_YZ_DIR) == iRelayActiveState )) {
+        msg += "E" ;
+      }        
+      if (( digitalRead(RELAY_YZ_PWM) == iRelayActiveState )) {
+        msg += "W" ;
+      }        
+      if (( digitalRead(RELAY_XZ_DIR) == iRelayActiveState )) {
         msg += "N" ;
-      }else{
-        msg += "S" ;            
-      }
-    } 
+      }        
+      if (( digitalRead(RELAY_XZ_PWM) == iRelayActiveState )) {
+        msg += "S" ;
+      }        
+    }
     display.drawString(128 , 11, msg ) ;
 //    display.drawString(128 , 22, String(pwmtest)) ;
     

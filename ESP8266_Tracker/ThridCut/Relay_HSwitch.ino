@@ -96,15 +96,24 @@ void ActivatePWMDIR(int iAllStop) {
   }else{
     analogWrite(1023-RELAY_XZ_PWM,iPWM_XZ);    
   }
+  if (( iPWM_XZ == 0 ) && ( (tv.iOutputType & 0x01 ) != 0 )){ // if it's off and using L298 then flip so both are at ground
+     digitalWrite(RELAY_XZ_DIR, LOW) ;
+  }
   if (( digitalRead(RELAY_XZ_DIR) == LOW )  || ( (tv.iOutputType & 0x01 ) == 0 )) {
     analogWrite(RELAY_YZ_PWM,iPWM_YZ);
   }else{
     analogWrite(1023-RELAY_YZ_PWM,iPWM_YZ);      
   }
-
-
+  if (( iPWM_YZ == 0 ) && ( (tv.iOutputType & 0x01 ) != 0 )){ // if it's off and using L298 then flip so both are at ground
+     digitalWrite(RELAY_YZ_DIR, LOW) ;
+  }
 }
-
+/*   look carefully below, RTFM !!! yes one is oppisite of the other (god knows why ?)
+RELAY_XZ_PWM D5;  PWM 1    Speed North / South     Was the X- S relay  Orange 
+RELAY_YZ_PWM D6;  PWM 2    Speed East / West       Was the Y+ W relay  Blue
+RELAY_YZ_DIR D7;  DIR 2    Y+ Y- East / West       Was the Y- E relay  Yellow
+RELAY_XZ_DIR D8;  DIR 1    X+ X-  North / South    Was the X+ N relay  Brown
+*/
 void ActivateRelays(int iAllStop) {
 int iEIN ; // ON - Active
 int iAUS ; // OFF - Inactive 
@@ -129,21 +138,21 @@ int iAUS ; // OFF - Inactive
     digitalWrite(RELAY_XZ_PWM, iAUS) ;
   } else {
     if (( digitalRead(RELAY_YZ_DIR) == iAUS ) && ( digitalRead(RELAY_YZ_PWM) == iAUS ) && (tv.motor_recycle_y == 0 )){
-      if ((( tv.yzAng  ) < ( tv.yzTarget - tv.yzH )) && ( digitalRead(RELAY_YZ_DIR) == iAUS )) {   // do Y ie E/W before N/S
-        digitalWrite(RELAY_YZ_DIR, iEIN) ;
-        digitalWrite(RELAY_YZ_PWM, iAUS) ;
-      }
-      if ((( tv.yzAng ) > ( tv.yzTarget + tv.yzH )) && ( digitalRead(RELAY_YZ_PWM) == iAUS )) {
-        digitalWrite(RELAY_YZ_DIR, iAUS) ;
+      if ((( tv.yzAng  ) < ( tv.yzTarget - tv.yzH )) && ( digitalRead(RELAY_YZ_PWM) == iAUS )) {   // do Y ie E/W before N/S
         digitalWrite(RELAY_YZ_PWM, iEIN) ;
+        digitalWrite(RELAY_YZ_DIR, iAUS) ;
+      }
+      if ((( tv.yzAng ) > ( tv.yzTarget + tv.yzH )) && ( digitalRead(RELAY_YZ_DIR) == iAUS )) {
+        digitalWrite(RELAY_YZ_PWM, iAUS) ;
+        digitalWrite(RELAY_YZ_DIR, iEIN) ;
       }
     }
-    if ((tv.yzAng > tv.yzTarget) && ( digitalRead(RELAY_YZ_DIR)==iEIN )) {
+    if ((tv.yzAng > tv.yzTarget) && ( digitalRead(RELAY_YZ_PWM)==iEIN )) {
       digitalWrite(RELAY_YZ_DIR, iAUS) ;
       digitalWrite(RELAY_YZ_PWM, iAUS) ;
       tv.motor_recycle_y = MOTOR_DWELL ;
     }
-    if ((tv.yzAng < tv.yzTarget) && ( digitalRead(RELAY_YZ_PWM)==iEIN )) {
+    if ((tv.yzAng < tv.yzTarget) && ( digitalRead(RELAY_YZ_DIR)==iEIN )) {
       digitalWrite(RELAY_YZ_DIR, iAUS) ;
       digitalWrite(RELAY_YZ_PWM, iAUS) ;
       tv.motor_recycle_y = MOTOR_DWELL ;
