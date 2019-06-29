@@ -8,7 +8,7 @@ https://www.hackster.io/DougalPlummer/esp-solar-tracker-revolutions-9c8a99
 The next versions are all here 
 
 Heads Up --- This code is always in flux, It is supplied as is. 
-Which means at times it can be broken (but not often).
+Which means at times it can be broken (but not often, ish, maybe, well).
 
 Please feel free to use it, go solar and help our home planet.
 
@@ -16,3 +16,5 @@ Third cut is sort of on version control will now detect changes to the EEPROM st
 do a factory reset on power up. It does not however save so you can dumpster dive your data from EEPROM is you wish
 or you can reload from EEPROM if you wish. This to give the highest probability of a successful boot up
 
+29/06/2019 Fixed the issues on the outputs when I combined the code from first and third versions.
+All tested on hardware in the workshop now so should be a little better.
