@@ -9,7 +9,7 @@ void StopXZ(){
 
 void ActivateOutput(int iAllStop) {
     switch (tv.iOutputType){
-      case 0: //  PWM/DIR     Nomal PWM board
+      case 0: //  PWM/DIR     Normal PWM board
       case 1: //  L298        IN1 IN2 ( EN tied high )
         ActivatePWMDIR(iAllStop) ;        // now refactored with crispy bits and red wine
       break;
@@ -89,12 +89,12 @@ void ActivatePWMDIR(int iAllStop) {
     StopXZ();
     StopYZ();
   }
-//  analogWrite(RELAY_XZ_PWM,iPWM_XZ);
-//  analogWrite(RELAY_YZ_PWM,iPWM_YZ);
-  if (( digitalRead(RELAY_XZ_DIR) == LOW ) || ( (tv.iOutputType & 0x01 ) == 0 )) {
+  analogWrite(RELAY_XZ_PWM,iPWM_XZ);
+  analogWrite(RELAY_YZ_PWM,iPWM_YZ);
+  if (( digitalRead(RELAY_XZ_DIR) == LOW ) || ((tv.iOutputType & 0x01 ) == 0 )) {
     analogWrite(RELAY_XZ_PWM,iPWM_XZ);
   }else{
-    analogWrite(1023-RELAY_XZ_PWM,iPWM_XZ);    
+    analogWrite(RELAY_XZ_PWM,1023-iPWM_XZ);    
   }
   if (( iPWM_XZ == 0 ) && ( (tv.iOutputType & 0x01 ) != 0 )){ // if it's off and using L298 then flip so both are at ground
      digitalWrite(RELAY_XZ_DIR, LOW) ;
@@ -102,7 +102,7 @@ void ActivatePWMDIR(int iAllStop) {
   if (( digitalRead(RELAY_XZ_DIR) == LOW )  || ( (tv.iOutputType & 0x01 ) == 0 )) {
     analogWrite(RELAY_YZ_PWM,iPWM_YZ);
   }else{
-    analogWrite(1023-RELAY_YZ_PWM,iPWM_YZ);      
+    analogWrite(RELAY_YZ_PWM,1023-iPWM_YZ);      
   }
   if (( iPWM_YZ == 0 ) && ( (tv.iOutputType & 0x01 ) != 0 )){ // if it's off and using L298 then flip so both are at ground
      digitalWrite(RELAY_YZ_DIR, LOW) ;

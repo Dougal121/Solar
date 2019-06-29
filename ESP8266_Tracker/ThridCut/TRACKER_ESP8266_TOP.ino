@@ -11,6 +11,8 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266httpUpdate.h>
+
+
 //#include <DNSServer.h>
 #include <TimeLib.h>         // arduino standard book of spells   
 #include <Wire.h>            // arduino inbuilt 
@@ -27,7 +29,6 @@
 #include "SH1106.h"
 #include "SH1106Wire.h"
 #include "ds3231.h"          // this one is in the GitHub where you found this code - It has changed since I started back in 2016
-
 
 #define BUFF_MAX 32
 
@@ -202,6 +203,7 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int iTimeSource ;         //  
   int iWindInputSource ;         //  
   float fWindSpeedCal  ;         //  
+  float fWindSpeedVel  ;         //  
 } tracker_stuff_t ;        // 
 
 tracker_stuff_t   tv   ;    // tracker variables
@@ -241,6 +243,7 @@ WiFiUDP ctrludp;
 ESP8266WebServer server(80);
 ESP8266WebServer OTAWebServer(81);
 ESP8266HTTPUpdateServer OTAWebUpdater;
+
 //DNSServer dnsServer;
 
 
@@ -311,7 +314,7 @@ String host ;
   pinMode(RELAY_YZ_DIR, OUTPUT); // 
   iPWM_YZ = 0 ;
   iPWM_XZ = 0 ;
-  ActivateRelays(0); // call an all stop first
+  ActivateOutput(0); // call an all stop first
 
   if (( tv.mag_min.x >= 0 ) || ( tv.mag_max.x <= 0 )){
     compass.m_min = (LSM303::vector<int16_t>){-32767, -32767, -32767};
@@ -420,14 +423,14 @@ String host ;
     ntpudp.begin(ghks.localPort);                      // this is the recieve on NTP port
     display.drawString(0, 44, "NTP UDP " );
     display.display();
-//    Serial.print("NTP Local UDP port: ");
-//    Serial.println(ntpudp.localPort());
+    Serial.print("NTP Local UDP port: ");
+    Serial.println(ntpudp.localPort());
     ctrludp.begin(ghks.localPortCtrl);                 // recieve on the control port
     display.drawString(64, 44, "CTRL UDP " );
     display.display();
-//    Serial.print("Control Local UDP port: ");
-//    Serial.println(ctrludp.localPort());
-                                                // end of the normal setup
+    Serial.print("Control Local UDP port: ");
+    Serial.println(ctrludp.localPort());
+                                                      // end of the normal setup
  
 /*  sprintf(host,"Control_%08X\0",ESP.getChipId());
 
@@ -440,7 +443,7 @@ String host ;
   }
 */
 
-  server.on("/", handleRoot);
+  server.on("/", handleRoot);                        // setup web interface server
   server.on("/setup", handleRoot);
   server.on("/scan", i2cScan);
   server.on("/eeprom", DisplayEEPROM);  
@@ -475,11 +478,11 @@ String host ;
   rtc_min = minute();
   rtc_sec = second();
 
-  HT.begin(0x00);
-  for (int led = 0; led < 127; led++) {
-    HT.clearLed(led);
+  HT.begin(0x00);                             // start the meatball
+  for (int led = 0; led < 127; led++) {       // and clear it  
+    HT.clearLed(led);                         
   } 
-  HT.sendLed();  
+  HT.sendLed();                               // update display 
   Serial.println("OTA startup");  
   OTAWebUpdater.setup(&OTAWebServer);
   OTAWebServer.begin();  
@@ -493,7 +496,7 @@ String host ;
     Serial.println("Warp Speed no GPS !");
   }
   lRebootCode = random(1,+2147483640) ;
-
+  tv.fWindSpeedVel = 0 ;
 }
 
 //  ##############################  LOOP   #############################
@@ -610,7 +613,7 @@ bool bSendCtrlPacket = false ;
     if ( iOutputActive == 0 ) {
       msg = "" ;
     }else{
-      msg = "-X-" ;      
+      msg = "O-" ;      
     }
     if ((tv.iOutputType & 0x02 ) == 0 ){  // both breads of PWM
       if ( iPWM_YZ != 0 ) {
@@ -634,16 +637,16 @@ bool bSendCtrlPacket = false ;
         iRelayActiveState = HIGH ;
       }      
       if (( digitalRead(RELAY_YZ_DIR) == iRelayActiveState )) {
-        msg += "E" ;
+        msg += "e" ;
       }        
       if (( digitalRead(RELAY_YZ_PWM) == iRelayActiveState )) {
-        msg += "W" ;
+        msg += "w" ;
       }        
       if (( digitalRead(RELAY_XZ_DIR) == iRelayActiveState )) {
-        msg += "N" ;
+        msg += "n" ;
       }        
       if (( digitalRead(RELAY_XZ_PWM) == iRelayActiveState )) {
-        msg += "S" ;
+        msg += "s" ;
       }        
     }
     display.drawString(128 , 11, msg ) ;
@@ -818,7 +821,7 @@ bool bSendCtrlPacket = false ;
         DS3231_get(&tv.tc);
         setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
       }       
-    }else{
+    }else{                     // Use NTP once a day  
       if ( !bConfig ) {        // ie we have a network
         if ( hour() == 0 ){    // once a day do this at midnight
           sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour
@@ -892,7 +895,7 @@ bool bSendCtrlPacket = false ;
   }else{
     iOutputActive = 0 ;       // power down 
   }
-  ActivateRelays(iOutputActive) ;  // Send the command
+  ActivateOutput(iOutputActive) ;  // Send the command
   
   if (second() > 4 ){
     if ( ntpudp.parsePacket() ) {
@@ -902,7 +905,7 @@ bool bSendCtrlPacket = false ;
 
   lRet = ctrludp.parsePacket() ;
   if ( lRet != 0 ) {
-//    processCtrlUDPpacket(lRet);
+    processCtrlUDPpacket(lRet);
   }
 
   if (lTimePrev > ( lTime + 100000 )){ // Housekeeping --- has wrapped around so back to zero

@@ -1045,7 +1045,8 @@ void SendHTTPPageFooter(){
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
   }
   server.sendContent("<br><a href='http://" + String(buff) + ":81/update'>OTA Firmware Update</a><br>");  
-  server.sendContent("<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>");         
+  server.sendContent("<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>");    
+  server.sendContent("<a href='https://github.com/Dougal121/Solar'>Source at GitHub</a><br>");  
   server.sendContent(F("</body></html>\r\n"));
 }
 
