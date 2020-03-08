@@ -33,7 +33,8 @@ void handleRoot() {
   String MyCheck , MyColor   ;
   byte mac[6];
   String message = "" ;
-
+  String pinname = "" ; 
+  
 //  SerialOutParams();
 
   for (uint8_t j=0; j<server.args(); j++){
@@ -67,6 +68,23 @@ void handleRoot() {
       if (( lRebootCode == String(server.arg(j)).toInt()) && ( lRebootCode > 0 )){  // stop the phone browser being a dick and retry resetting !!!!
         ESP.restart() ;        
       }
+    }
+
+    i = String(server.argName(j)).indexOf("b0");
+    if (i != -1) { // output pin
+      tv.RELAY_XZ_PWM = String(server.arg(j)).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("b1");
+    if (i != -1) { // output pin
+      tv.RELAY_YZ_PWM = String(server.arg(j)).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("b2");
+    if (i != -1) { // output pin
+      tv.RELAY_XZ_DIR = String(server.arg(j)).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("b3");
+    if (i != -1) { // output pin
+      tv.RELAY_YZ_DIR = String(server.arg(j)).toInt() ;
     }
         
     i = String(server.argName(j)).indexOf("disop");
@@ -345,7 +363,7 @@ void handleRoot() {
   server.sendContent(F("</td></tr><tr><td>Last Calculations</td><td align=right>"));
   snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d<br>", tv.tc.year, tv.tc.mon, tv.tc.mday , tv.tc.hour, tv.tc.min, tv.tc.sec);
   server.sendContent(String(buff)) ; 
-  server.sendContent(F("</td></tr><tr><td><b>Arduino Time</b></td><td align=right><b>"));
+  server.sendContent(F("</td></tr><tr><td><b>ESP32 Time</b></td><td align=right><b>"));
   snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
   server.sendContent(String(buff)) ; 
   server.sendContent(F("</td></tr></table>"));
@@ -419,7 +437,93 @@ void handleRoot() {
     server.sendContent(F("<option value='1' SELECTED>1 - Invert")); 
   }
   server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
-      
+
+  server.sendContent("<form method=get action=/><tr><td>RELAY_XZ_PWM PIN</td><td align=center><select name='b0'>");
+  for (ii = 14; ii < 33; ii++) {
+    if (tv.RELAY_XZ_PWM == ii ){
+      MyColor = F(" SELECTED ");
+    }else{
+      MyColor = "";            
+    }
+    iTmp = 0 ;
+    switch(ii){
+      case 27: pinname = F("GPIO 27") ; break;
+      case 14: pinname = F("GPIO 14") ; break;
+      case 16: pinname = F("GPIO 16") ; break;
+      case 17: pinname = F("GPIO 17") ; break;
+      default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
+    }
+    if ( iTmp == 0 ) {
+      server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
+    }
+  }
+  server.sendContent("</select></td><td><input type='submit' value='SET'></td></tr></form>") ;
+
+
+  server.sendContent("<form method=get action=/><tr><td>RELAY_YZ_PWM PIN</td><td align=center><select name='b1'>");
+  for (ii = 14; ii < 33; ii++) {
+    if (tv.RELAY_YZ_PWM == ii ){
+      MyColor = F(" SELECTED ");
+    }else{
+      MyColor = "";            
+    }
+    iTmp = 0 ;
+    switch(ii){
+      case 27: pinname = F("GPIO 27") ; break;
+      case 14: pinname = F("GPIO 14") ; break;
+      case 16: pinname = F("GPIO 16") ; break;
+      case 17: pinname = F("GPIO 17") ; break;
+      default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
+    }
+    if ( iTmp == 0 ) {
+      server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
+    }
+  }
+  server.sendContent("</select></td><td><input type='submit' value='SET'></td></tr></form>") ;
+
+  server.sendContent("<form method=get action=/><tr><td>RELAY_XZ_DIR PIN</td><td align=center><select name='b2'>");
+  for (ii = 14; ii < 33; ii++) {
+    if (tv.RELAY_XZ_DIR == ii ){
+      MyColor = F(" SELECTED ");
+    }else{
+      MyColor = "";            
+    }
+    iTmp = 0 ;
+    switch(ii){
+      case 27: pinname = F("GPIO 27") ; break;
+      case 14: pinname = F("GPIO 14") ; break;
+      case 16: pinname = F("GPIO 16") ; break;
+      case 17: pinname = F("GPIO 17") ; break;
+      default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
+    }
+    if ( iTmp == 0 ) {
+      server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
+    }
+  }
+  server.sendContent("</select></td><td><input type='submit' value='SET'></td></tr></form>") ;
+
+  server.sendContent("<form method=get action=/><tr><td>RELAY_YZ_DIR PIN</td><td align=center><select name='b3'>");
+  for (ii = 14; ii < 33; ii++) {
+    if (tv.RELAY_YZ_DIR == ii ){
+      MyColor = F(" SELECTED ");
+    }else{
+      MyColor = "";            
+    }
+    iTmp = 0 ;
+    switch(ii){
+      case 27: pinname = F("GPIO 27") ; break;
+      case 14: pinname = F("GPIO 14") ; break;
+      case 16: pinname = F("GPIO 16") ; break;
+      case 17: pinname = F("GPIO 17") ; break;
+      default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
+    }
+    if ( iTmp == 0 ) {
+      server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
+    }
+  }
+  server.sendContent("</select></td><td><input type='submit' value='SET'></td></tr></form>") ;
+
+
   server.sendContent(F("<form method=get action=/><tr><td>Latitude +N -S</td><td align=center><input type='text' name='mylat' value='")) ; 
   server.sendContent(String(tv.latitude,8));
   server.sendContent(F("' size=12></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
@@ -770,6 +874,7 @@ void SendHTTPPageFooter(){
   server.sendContent("<br><a href='http://" + String(buff) + "/update'>OTA Firmware Update</a><br>");  
   server.sendContent("<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>");    
   server.sendContent("<a href='https://github.com/Dougal121/Solar'>Source at GitHub</a><br>");  
+  server.sendContent("<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br>");  
   server.sendContent(F("</body></html>\r\n"));
 }
 

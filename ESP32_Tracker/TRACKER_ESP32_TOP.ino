@@ -93,6 +93,7 @@ static bool hasNet = false;
 static bool hasGyro = false;
 static bool hasRTC = false;
 static bool hasPres = false ;
+const int MAX_EEPROM = 1024 ;
 
 char dayarray[8] = {'S','M','T','W','T','F','S','E'} ;
 char Toleo[10] = {"Ver 3.8\0"}  ;
@@ -249,6 +250,9 @@ long lTimePrev ;
 long lTimePrev2 ;
 long lRebootCode = 0 ;
 uint64_t chipid; 
+int iUploadPos = 0 ;
+long  MyCheckSum ;
+long  MyTestSum ;
 
 WiFiUDP ntpudp;
 //WiFiUDP ctrludp;
@@ -275,7 +279,7 @@ String host ;
   pinMode(LED,OUTPUT);                  //  builtin LED
 //  pinMode(SETPMODE_PIN,INPUT_PULLUP);   // flashy falshy
 
-  EEPROM.begin(1024);                   // open our safe and sacrate repository
+  EEPROM.begin(MAX_EEPROM);
   LoadParamsFromEEPROM(true);
 
   Serial.println(ghks.cssid[0]);
@@ -303,7 +307,7 @@ String host ;
   display.drawString(63, 16, "Tracker");
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);  
-  display.drawString(0, 40, "Copyright (c) 2019");
+  display.drawString(0, 40, "Copyright (c) 2020");
   display.drawString(0, 50, "Dougal Plummer");
   display.setTextAlignment(TEXT_ALIGN_RIGHT);  
   display.drawString(127, 50, String(Toleo));
@@ -322,7 +326,7 @@ String host ;
     hasPres = true ;
   }      
 //  pinMode(FACTORY_RESET,INPUT_PULLUP);
-  pinMode(tv.RELAY_XZ_DIR, OUTPUT); // Outputs for PWM motor control
+  pinMode(tv.RELAY_XZ_DIR, OUTPUT); // Outputs for PWM motor control or relays
   pinMode(tv.RELAY_XZ_PWM, OUTPUT); // 
   pinMode(tv.RELAY_YZ_PWM, OUTPUT); //
   pinMode(tv.RELAY_YZ_DIR, OUTPUT); // 
@@ -468,6 +472,9 @@ String host ;
   server.on("/info", handleInfo);  
   server.on("/stime", handleTime);
   server.on("/sensor",handleSensor);
+  server.on("/backup", HTTP_GET , handleBackup);
+  server.on("/backup.txt", HTTP_GET , handleBackup);
+  server.on("/backup.txt", HTTP_POST,  handleRoot, handleFileUpload); 
   server.on("/login", HTTP_GET, []() {
     server.sendHeader("Connection", "close");
     server.send(200, "text/html", loginIndex);
