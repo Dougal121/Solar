@@ -526,7 +526,7 @@ String host ;
   DS3231_init(DS3231_INTCN); // look for a rtc
   DS3231_get(&tv.tc);
   rtc_status = DS3231_get_sreg();
-  if (((tv.tc.mon < 1 )|| (tv.tc.mon > 12 )) ){  // no rtc to load off  && (tv.tc.wday>8)
+  if (((tc.mon < 1 ) || (tc.mon > 12 )) && ((tc.wday > 8)||(tc.wday < 1))) { // no rtc to load off
     Serial.println("NO RTC ?");
   }else{
     setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
