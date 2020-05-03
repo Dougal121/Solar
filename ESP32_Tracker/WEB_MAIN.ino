@@ -899,8 +899,8 @@ String sendTDTREnd(){
 }
 
 void SendHTTPHeader(){
-  server.sendHeader(F("Server"),F("ESP8266-on-beetle-juice"),false);
-  server.sendHeader(F("X-Powered-by"),F("Dougal-1.1"),false);
+  server.sendHeader(F("Server"),F("ESP32-on-beetle-juice"),false);
+  server.sendHeader(F("X-Powered-by"),F("Dougal-filament-6"),false);
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", "");
   server.sendContent(F("<!DOCTYPE HTML>"));
