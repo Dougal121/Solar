@@ -18,3 +18,5 @@ or you can reload from EEPROM if you wish. This to give the highest probability 
 
 29/06/2019 Fixed the issues on the outputs when I combined the code from first and third versions.
 All tested on hardware in the workshop now so should be a little better.
+
+08/05/2020  Did a minor update but not tested on full hardware yet - just the CPU.(for an uptime meter)
