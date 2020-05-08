@@ -117,7 +117,14 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   char cssid[32] ;                        //   
   char cpassword[24] ;                    // 
   long lDisplayOptions  ;                 //  
+  uint8_t lNetworkOptions  ;              // 84 
+  uint8_t lSpare1  ;                      // 85 
+  uint8_t lSpare2  ;                      // 86   
   char timeServer[40] ;                   //    = {"au.pool.ntp.org\0"}
+  IPAddress IPStatic ;                    // (192,168,0,123)   
+  IPAddress IPGateway ;                   // (192,168,0,1)    
+  IPAddress IPMask ;                      // (255,255,255,0)   
+  IPAddress IPDNS ;                       // (192,168,0,15)   
 } general_housekeeping_stuff_t ;          // 
 
 general_housekeeping_stuff_t ghks ;
@@ -253,6 +260,9 @@ uint64_t chipid;
 int iUploadPos = 0 ;
 long  MyCheckSum ;
 long  MyTestSum ;
+unsigned long lTimeNext = 0 ;     // next network retry
+bool bPrevConnectionStatus = false;
+long lMinUpTime = 0 ;
 
 WiFiUDP ntpudp;
 //WiFiUDP ctrludp;
@@ -526,7 +536,7 @@ String host ;
   DS3231_init(DS3231_INTCN); // look for a rtc
   DS3231_get(&tv.tc);
   rtc_status = DS3231_get_sreg();
-  if (((tc.mon < 1 ) || (tc.mon > 12 )) && ((tc.wday > 8)||(tc.wday < 1))) { // no rtc to load off
+  if (((tv.tc.mon < 1 ) || (tv.tc.mon > 12 )) && ((tv.tc.wday > 8)||(tv.tc.wday < 1))) { // no rtc to load off
     Serial.println("NO RTC ?");
   }else{
     setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
@@ -578,6 +588,7 @@ unsigned short failcs;
 String msg ;
 int iRelayActiveState ;
 bool bSendCtrlPacket = false ;
+long lTD ;
 
   server.handleClient();
 //  OTAWebServer.handleClient();
@@ -905,6 +916,7 @@ bool bSendCtrlPacket = false ;
     rtc_hour = hour(); 
   }
   if ( rtc_min != minute()){
+    lMinUpTime++ ;    
     if (hasPres){
       tv.Pr = getPressure((float *)&tv.gT) ;
     }
@@ -983,6 +995,40 @@ bool bSendCtrlPacket = false ;
       gps.encode(Serial.read());
     }  
   }  
+
+  snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
+  if ( !bPrevConnectionStatus && WiFi.isConnected() ){
+      Serial.println(String(buff )+ " WiFi Reconnected OK...");  
+  }
+  if (!WiFi.isConnected())  {
+    lTD = (long)lTimeNext-(long) millis() ;
+    if (( abs(lTD)>40000)||(bPrevConnectionStatus)){ // trying to get roll over protection and a 30 second retry
+      lTimeNext = millis() - 1 ;
+/*      Serial.print(millis());
+      Serial.print(" ");
+      Serial.print(lTimeNext);
+      Serial.print(" ");
+      Serial.println(abs(lTD));*/
+    }
+    bPrevConnectionStatus = false;
+    if ( lTimeNext < millis() ){
+      Serial.println(String(buff )+ " Trying to reconnect WiFi ");
+      WiFi.disconnect(false);
+//      Serial.println("Connecting to WiFi...");
+      WiFi.mode(WIFI_AP_STA);
+      if ( ghks.lNetworkOptions != 0 ) {            // use ixed IP
+        WiFi.config(ghks.IPStatic, ghks.IPGateway, ghks.IPMask, ghks.IPDNS );
+      }
+      if ( ghks.npassword[0] == 0 ) {
+        WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point
+      } else {
+        WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
+      }
+      lTimeNext = millis() + 30000 ;
+    }
+  }else{
+    bPrevConnectionStatus = true ;
+  }    
 //  dnsServer.processNextRequest();
 }   // ####################  BOTTOM OF LOOP  ###########################################
 

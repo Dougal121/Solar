@@ -740,6 +740,9 @@ void handleRoot() {
   server.sendContent(String(tv.heading,1)) ;     
   server.sendContent(F("</td><td>(Deg)</td></tr>")) ;
 
+  snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
+  server.sendContent("<tr><td>Computer Uptime</td><td align=center>"+String(buff)+"</td><td>(day:hr:min)</td></tr>" ) ;
+  server.sendContent(F("</td></tr>"));
   server.sendContent(F("</table><br>")) ;
   
   server.sendContent(F("<table border=1 title='Solar Tracker Status'>")) ;
