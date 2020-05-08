@@ -236,6 +236,7 @@ bool bDoTimeUpdate = false ;
 long lTimePrev ;
 long lTimePrev2 ;
 long lRebootCode = 0 ;
+long lMinUpTime = 0 ;
 
 WiFiUDP ntpudp;
 WiFiUDP ctrludp;
@@ -840,6 +841,7 @@ bool bSendCtrlPacket = false ;
     rtc_hour = hour(); 
   }
   if ( rtc_min != minute()){
+    lMinUpTime++ ;
     if (hasPres){
       tv.Pr = getPressure((float *)&tv.gT) ;
     }
