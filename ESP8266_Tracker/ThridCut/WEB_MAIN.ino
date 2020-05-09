@@ -1042,7 +1042,7 @@ void SendHTTPPageFooter(){
   server.sendContent(F("<a href='/sensor'>Sensor Calibration</a><br>"));
   server.sendContent(F("<a href='/info'>Node Infomation</a><br>"));
   server.sendContent(F("<a href='/setup'>WiFi Setup</a><br>"));
-  if (( ghks.MyIP[0] == 0 ) && ( ghks.MyIP[1] == 0 )){
+  if (!WiFi.isConnected()){
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  
   }else{
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
