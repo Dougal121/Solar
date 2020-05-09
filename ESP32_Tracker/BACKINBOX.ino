@@ -2,7 +2,8 @@ void BackIntheBoxMemory(){
   uint8_t i , j ;
 
   ghks.lVersion = LVER ;
-  ghks.lDisplayOptions = 1;
+  ghks.lDisplayOptions = 1 ;
+  ghks.lNetworkOptions = 0 ; 
   for ( i = 0 ; i < sizeof(ghks.npassword) ; i++ ){     
     ghks.npassword[i] = 0 ;  
   }
@@ -16,7 +17,6 @@ void BackIntheBoxMemory(){
   sprintf(ghks.nssid,"************\0");  // put your default credentials in here if you wish
   sprintf(ghks.npassword,"********\0");  // put your default credentials in here if you wish
   
-
   
   sprintf(ghks.NodeName,"Most Excellent\0") ;
   sprintf(ghks.timeServer, "au.pool.ntp.org\0") ;
@@ -29,7 +29,24 @@ void BackIntheBoxMemory(){
   ghks.MyIP[1] = 0 ; 
   ghks.MyIP[2] = 0 ;
   ghks.MyIP[3] = 0 ;
-  
+
+  ghks.IPStatic[0] = 192 ;
+  ghks.IPStatic[1] = 168 ;
+  ghks.IPStatic[2] = 2 ;
+  ghks.IPStatic[3] = 234 ;
+
+  ghks.IPGateway[0] = 192 ;
+  ghks.IPGateway[1] = 168 ;
+  ghks.IPGateway[2] = 1 ;
+  ghks.IPGateway[3] = 1 ;
+
+  ghks.IPDNS = ghks.IPGateway ;
+
+  ghks.IPMask[0] = 255 ;
+  ghks.IPMask[1] = 255 ;
+  ghks.IPMask[2] = 255 ;
+  ghks.IPMask[3] = 0 ;
+    
   tv.xzH = 4.0;             // hysterisis NS
   tv.yzH = 4.0;             //    ""      EW
 
@@ -77,10 +94,14 @@ void BackIntheBoxMemory(){
   ghks.MyIPC = IPAddress(192,168,5 +(chipid & 0x7f ) ,1);
   tv.xMaxMotorSpeed = MAX_MOTOR_PWM ;
   tv.yMaxMotorSpeed = MAX_MOTOR_PWM ;
-  tv.RELAY_XZ_PWM = 14 ; // defaults for a relay sheild if your that way inclined
+/*  tv.RELAY_XZ_PWM = 14 ; // defaults for a relay sheild if your that way inclined
   tv.RELAY_YZ_PWM = 27 ;
   tv.RELAY_XZ_DIR = 16 ;
-  tv.RELAY_YZ_DIR = 17 ;
+  tv.RELAY_YZ_DIR = 17 ;*/
+  tv.RELAY_XZ_PWM = 12 ; // defaults for a relay sheild if your that way inclined
+  tv.RELAY_YZ_PWM = 13 ;
+  tv.RELAY_XZ_DIR = 14 ;
+  tv.RELAY_YZ_DIR = 15 ;
   sprintf(tv.trackername,"Most Excellent\0");
   sprintf(ghks.cssid , "Configure_%X\0",chipid) ;
   bSaveReq = 1 ;

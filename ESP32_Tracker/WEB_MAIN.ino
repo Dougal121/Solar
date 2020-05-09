@@ -439,20 +439,24 @@ void handleRoot() {
   server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
 
   server.sendContent("<form method=get action=/><tr><td>RELAY_XZ_PWM PIN</td><td align=center><select name='b0'>");
-  for (ii = 14; ii < 33; ii++) {
+  for (ii = 0; ii < 33; ii++) {
     if (tv.RELAY_XZ_PWM == ii ){
       MyColor = F(" SELECTED ");
     }else{
       MyColor = "";            
     }
-    iTmp = 0 ;
-    switch(ii){
-      case 27: pinname = F("GPIO 27") ; break;
+//    iTmp = 0 ;
+    pinname = strPINName(ii,&iTmp);
+/*    switch(ii){
+      case 12: pinname = F("GPIO 12") ; break;
+      case 13: pinname = F("GPIO 13") ; break;
       case 14: pinname = F("GPIO 14") ; break;
+      case 15: pinname = F("GPIO 15") ; break;
       case 16: pinname = F("GPIO 16") ; break;
-      case 17: pinname = F("GPIO 17") ; break;
+      case 25: pinname = F("GPIO 25") ; break;
+      case 26: pinname = F("GPIO 26") ; break;
       default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
-    }
+    }*/
     if ( iTmp == 0 ) {
       server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
     }
@@ -461,20 +465,21 @@ void handleRoot() {
 
 
   server.sendContent("<form method=get action=/><tr><td>RELAY_YZ_PWM PIN</td><td align=center><select name='b1'>");
-  for (ii = 14; ii < 33; ii++) {
+  for (ii = 0; ii < 33; ii++) {
     if (tv.RELAY_YZ_PWM == ii ){
       MyColor = F(" SELECTED ");
     }else{
       MyColor = "";            
     }
-    iTmp = 0 ;
-    switch(ii){
+//    iTmp = 0 ;
+    pinname = strPINName(ii,&iTmp);
+/*    switch(ii){
       case 27: pinname = F("GPIO 27") ; break;
       case 14: pinname = F("GPIO 14") ; break;
       case 16: pinname = F("GPIO 16") ; break;
       case 17: pinname = F("GPIO 17") ; break;
       default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
-    }
+    }*/
     if ( iTmp == 0 ) {
       server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
     }
@@ -482,20 +487,21 @@ void handleRoot() {
   server.sendContent("</select></td><td><input type='submit' value='SET'></td></tr></form>") ;
 
   server.sendContent("<form method=get action=/><tr><td>RELAY_XZ_DIR PIN</td><td align=center><select name='b2'>");
-  for (ii = 14; ii < 33; ii++) {
+  for (ii = 0; ii < 33; ii++) {
     if (tv.RELAY_XZ_DIR == ii ){
       MyColor = F(" SELECTED ");
     }else{
       MyColor = "";            
     }
-    iTmp = 0 ;
-    switch(ii){
+//    iTmp = 0 ;
+    pinname = strPINName(ii,&iTmp);
+/*    switch(ii){
       case 27: pinname = F("GPIO 27") ; break;
       case 14: pinname = F("GPIO 14") ; break;
       case 16: pinname = F("GPIO 16") ; break;
       case 17: pinname = F("GPIO 17") ; break;
       default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
-    }
+    }*/
     if ( iTmp == 0 ) {
       server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
     }
@@ -503,20 +509,22 @@ void handleRoot() {
   server.sendContent("</select></td><td><input type='submit' value='SET'></td></tr></form>") ;
 
   server.sendContent("<form method=get action=/><tr><td>RELAY_YZ_DIR PIN</td><td align=center><select name='b3'>");
-  for (ii = 14; ii < 33; ii++) {
+  for (ii = 0; ii < 33; ii++) {
     if (tv.RELAY_YZ_DIR == ii ){
       MyColor = F(" SELECTED ");
     }else{
       MyColor = "";            
     }
-    iTmp = 0 ;
+//    iTmp = 0 ;
+    pinname = strPINName(ii,&iTmp);
+/*    
     switch(ii){
       case 27: pinname = F("GPIO 27") ; break;
       case 14: pinname = F("GPIO 14") ; break;
       case 16: pinname = F("GPIO 16") ; break;
       case 17: pinname = F("GPIO 17") ; break;
       default: pinname = F("- UNKNOWN-") ; iTmp = 1 ; break;
-    }
+    }*/
     if ( iTmp == 0 ) {
       server.sendContent( "<option value="+String(ii)+ MyColor +">" + pinname ) ;          
     }
@@ -742,7 +750,6 @@ void handleRoot() {
 
   snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
   server.sendContent("<tr><td>Computer Uptime</td><td align=center>"+String(buff)+"</td><td>(day:hr:min)</td></tr>" ) ;
-  server.sendContent(F("</td></tr>"));
   server.sendContent(F("</table><br>")) ;
   
   server.sendContent(F("<table border=1 title='Solar Tracker Status'>")) ;
@@ -869,7 +876,7 @@ void SendHTTPPageFooter(){
   server.sendContent(F("<a href='/sensor'>Sensor Calibration</a><br>"));
   server.sendContent(F("<a href='/info'>Node Infomation</a><br>"));
   server.sendContent(F("<a href='/setup'>WiFi Setup</a><br>"));
-  if (( ghks.MyIP[0] == 0 ) && ( ghks.MyIP[1] == 0 )){
+  if (!WiFi.isConnected()){
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  
   }else{
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
@@ -915,4 +922,22 @@ void SendHTTPHeader(){
   server.sendContent(F("</head><body><html><center>"));  
 }
 
+String strPINName(int iPin,int *iTmp)
+{
+  *iTmp = 0 ;
+  String pinname = "" ;
+    switch(iPin){
+      case 0: pinname = F("GPIO 0") ; break;
+      case 2: pinname = F("GPIO 2") ; break;
+      case 12: pinname = F("GPIO 12") ; break;
+      case 13: pinname = F("GPIO 13") ; break;
+      case 14: pinname = F("GPIO 14") ; break;
+      case 15: pinname = F("GPIO 15") ; break;
+      case 16: pinname = F("GPIO 16") ; break;
+      case 25: pinname = F("GPIO 25") ; break;
+      case 26: pinname = F("GPIO 26") ; break;
+      default: pinname = F("- UNKNOWN-") ; *iTmp = 1 ; break;
+    }
+    return(pinname);
+}
 

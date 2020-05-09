@@ -4,6 +4,7 @@
  *  With help and contributions from many people - my thanks to them all.
  *  
  *  Feel free to use this code to help save our planet any way you can - GO SOLAR !
+ *  Compiles for LOLIN D32 @ 80Mhz
  */
 #include <esp_task_wdt.h>
 #include <WiFi.h>
@@ -41,7 +42,7 @@
 //const byte FLASH_BTN = D3 ;    // GPIO 0 = FLASH BUTTON 
 //const byte SCOPE_PIN = D3 ;
 //const byte FACTORY_RESET = D0 ;
-const byte LED = 2 ;  // emprical number of the board i was using (found by shear dumb luck)
+const byte LED = 2 ;                                                                // emprical number of the board i was using (found by shear dumb luck)
 const byte MAX_WIFI_TRIES = 45 ;
 
 SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2                           onboard 0.96" LOED display as per picture
@@ -998,7 +999,8 @@ long lTD ;
 
   snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
   if ( !bPrevConnectionStatus && WiFi.isConnected() ){
-      Serial.println(String(buff )+ " WiFi Reconnected OK...");  
+    Serial.println(String(buff )+ " WiFi Reconnected OK...");  
+    ghks.MyIP =  WiFi.localIP() ;
   }
   if (!WiFi.isConnected())  {
     lTD = (long)lTimeNext-(long) millis() ;
