@@ -13,7 +13,7 @@ void ActivateOutput(int iAllStop) {
       case 1: //  L298        IN1 IN2 ( EN tied high )
         ActivatePWMDIR(iAllStop) ;        // now refactored with crispy bits and red wine
       break;
-      case 2: // active high and low combinations ( code recued from the original part one tracker )    
+      case 2: // active high and low combinations ( code rescued from the original part one tracker )    
       case 3:     
         ActivateRelays(iAllStop) ;     
       break;
@@ -89,20 +89,20 @@ void ActivatePWMDIR(int iAllStop) {
     StopXZ();
     StopYZ();
   }
-  dacWrite(tv.RELAY_XZ_PWM,iPWM_XZ);
-  dacWrite(tv.RELAY_YZ_PWM,iPWM_YZ);
+  ledcWrite(RELAY_XZ_PWM,iPWM_XZ);
+  ledcWrite(RELAY_YZ_PWM,iPWM_YZ);
   if (( digitalRead(tv.RELAY_XZ_DIR) == LOW ) || ((tv.iOutputType & 0x01 ) == 0 )) {
-    dacWrite(tv.RELAY_XZ_PWM,iPWM_XZ);
+    ledcWrite(RELAY_XZ_PWM,iPWM_XZ);
   }else{
-    dacWrite(tv.RELAY_XZ_PWM,1023-iPWM_XZ);    
+    ledcWrite(RELAY_XZ_PWM,1023-iPWM_XZ);    
   }
   if (( iPWM_XZ == 0 ) && ( (tv.iOutputType & 0x01 ) != 0 )){ // if it's off and using L298 then flip so both are at ground
-     dacWrite(tv.RELAY_XZ_DIR, LOW) ;
+     digitalWrite(tv.RELAY_XZ_DIR, LOW) ;
   }
   if (( digitalRead(tv.RELAY_XZ_DIR) == LOW )  || ( (tv.iOutputType & 0x01 ) == 0 )) {
-    dacWrite(tv.RELAY_YZ_PWM,iPWM_YZ);
+    ledcWrite(RELAY_YZ_PWM,iPWM_YZ);
   }else{
-    dacWrite(tv.RELAY_YZ_PWM,1023-iPWM_YZ);      
+    ledcWrite(RELAY_YZ_PWM,1023-iPWM_YZ);      
   }
   if (( iPWM_YZ == 0 ) && ( (tv.iOutputType & 0x01 ) != 0 )){ // if it's off and using L298 then flip so both are at ground
      digitalWrite(tv.RELAY_YZ_DIR, LOW) ;

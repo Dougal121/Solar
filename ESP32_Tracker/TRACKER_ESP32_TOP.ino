@@ -87,6 +87,9 @@ SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2                      
 //const byte RELAY_YZ_DIR = D7; // DIR 2    Y+ Y- East / West       Was the Y- E relay  Yellow
 //const byte RELAY_XZ_DIR = D8; // DIR 1    X+ X-  North / South    Was the X+ N relay  Brown
 
+const byte  RELAY_XZ_PWM = 1 ;
+const byte  RELAY_YZ_PWM = 2 ;
+
 #define MINUTESPERDAY 1440
 
 static bool hasSD = false;
@@ -343,6 +346,12 @@ String host ;
   pinMode(tv.RELAY_YZ_DIR, OUTPUT); // 
   iPWM_YZ = 0 ;
   iPWM_XZ = 0 ;
+  if (tv.iOutputType<2) {                 // need to setup 2 PWM channels
+      ledcSetup(RELAY_XZ_PWM, 5000, 10);             // 5 kHz PWM, 10-bit resolution
+      ledcSetup(RELAY_YZ_PWM, 5000, 10);
+      ledcAttachPin(tv.RELAY_XZ_PWM, RELAY_XZ_PWM);  // assign PWM pins to channels
+      ledcAttachPin(tv.RELAY_YZ_PWM, RELAY_YZ_PWM);  //     
+  }
   ActivateOutput(0); // call an all stop first
 
   if (( tv.mag_min.x >= 0 ) || ( tv.mag_max.x <= 0 )){
