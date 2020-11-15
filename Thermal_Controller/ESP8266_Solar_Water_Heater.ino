@@ -34,6 +34,7 @@ ESPMail WDmail;
 #define MAX_EMAIL_ALARMS 8 
 #define MAX_RELAY 4
 #define MAX_TEMP_SENSOR 5
+#define MAX_MODES 2
 
 uint16_t au16data[MAX_MODBUS_DATA]; //!< data array for modbus network sharing
 uint8_t u8state; //!< machine state
@@ -72,8 +73,8 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
 general_housekeeping_stuff_t ghks ;
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
-  float   fTankMaxTemp ;
   float   fCollectorMinTemp ;
+  float   fCollectorMaxTemp ;
   float   fSolarTempDiffMax ;
   float   fSolarTempDiffMin ;
   float   fTopBoostTemp ;
@@ -505,13 +506,15 @@ long lTD ;
     }
     switch(shas.iMode){        // selected operational mode for pump  work out that has to be on
       case 0:                  // temp differental control
-        if (( shams.fTemp[0] - shams.fTemp[2]) > shas.fSolarTempDiffMax ) { // turn on the pump relay   (collector - tank bottom)
-          shams.bRelayState[0] = shas.ActiveValue[0] ;
-        }
-        if (( shams.fTemp[0] - shams.fTemp[2]) < shas.fSolarTempDiffMin ) { // turn off the pump relay  (collector - tank bottom)
+        if (( shams.fTemp[4] - shams.fTemp[1]) < shas.fSolarTempDiffMin ){ // turn off the pump relay  (collector - tank bottom)
           shams.bRelayState[0] = !shas.ActiveValue[0] ;
         }
-
+        if (( shams.fTemp[4] - shams.fTemp[1]) > shas.fSolarTempDiffMax ) { // turn on the pump relay   (collector - tank bottom)
+          shams.bRelayState[0] = shas.ActiveValue[0] ;
+        }
+        if (( shams.fTemp[1] < shas.fCollectorMinTemp  ) || ( shams.fTemp[1] > shas.fCollectorMaxTemp  )){  // set to run for five minutes if over or under temp
+          shams.TTG[i] = 5 ;
+        }
       break;
       case 1:                  // timer solar disc at 10 Deg (45 ish minutes after sunrise and before sunset)
           if (SolarApp.solar_el_deg >= 10 ) {          // day
@@ -525,19 +528,20 @@ long lTD ;
       case 2:                  // ?
       break;
     }
-
+    
     if ( shams.fTemp[0] < shas.fTopBoostTemp ){
       shams.bRelayState[1] = shas.ActiveValue[1] ;
     }
-    if ( shams.fTemp[0] > ( shas.fTopBoostTemp + 2.0 )){
+    if ( shams.fTemp[0] > ( shas.fTopBoostTemp + shas.fTopBoostDiffTemp )){
       shams.bRelayState[1] = !shas.ActiveValue[1] ;      
     }
     if ( shams.fTemp[1] < shas.fBottomBoostTemp ){
       shams.bRelayState[2] = shas.ActiveValue[2] ;
     }
-    if ( shams.fTemp[1] > ( shas.fBottomBoostTemp + 2.0 )){
+    if ( shams.fTemp[1] > ( shas.fBottomBoostTemp + shas.fBottomBoostDiffTemp )){
       shams.bRelayState[2] = !shas.ActiveValue[2] ;      
     }
+    shams.bRelayState[3] = shams.bRelayState[0] ;  // may as well as mirror the first relay without the frost protection
     
     for ( i = 0 ; i < MAX_RELAY ; i++ ){
       if (shams.TTG[i] > 0 ) {   // if yo have done an activate then switch it on for test
@@ -546,6 +550,28 @@ long lTD ;
       if (( shas.relayPort[i] >= 0 ) && ( shas.relayPort[i] < 17 )){    // write active status to ports if they look remotely correct
         digitalWrite( shas.relayPort[i] , shams.bRelayState[i] );
       }
+    }
+
+    if (( shams.fTemp[0] < shas.fTankUnder1TempAlarm ) && !( shams.fTemp[0] < shas.fTankUnder2TempAlarm )) {
+      shams.bAlarm[0] = true ;                     // tank luke warm
+    }
+    if ( shams.fTemp[0] < shas.fTankUnder1TempAlarm ){
+      shams.bAlarm[1] = true ;                     // tank cold temp
+    }
+    if ( shams.fTemp[0] > shas.fTankOverTempAlarm ){
+      shams.bAlarm[2] = true ;                     // tank over temp
+    }
+    if ( shams.fTemp[4] > shas.fCollectorMaxTemp ){ // collector over temp
+      shams.bAlarm[3] = true ;
+    }
+    if ( shams.fTemp[4] < shas.fCollectorMinTemp ){ // collector under temp
+      shams.bAlarm[4] = true ;      
+    }
+    if ( shams.bRelayState[1] == shas.ActiveValue[1] ){                            // boost energised 1
+      shams.bAlarm[5] = true ;      
+    }
+    if ( shams.bRelayState[1] == shas.ActiveValue[2] ){                            // boost energised 2
+      shams.bAlarm[6] = true ;      
     }
     
   }
@@ -578,6 +604,12 @@ long lTD ;
         bDoTimeUpdate = true ;
       }  
     }
+    if ( rtc_hour == 14 ){
+      for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){                  // do the single shot on alarm messages
+        shams.bAlarm[i] = false ;
+        shams.bPrevAlarm[i] = false ;
+      }
+    }
     rtc_hour = hour() ;
   }
   
@@ -586,9 +618,10 @@ long lTD ;
   if ( lRet != 0 ) {
     processNTPpacket();
   }
+  
 
   for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){                  // do the single shot on alarm messages
-    if ( shams.bAlarm[i] && !shams.bPrevAlarm[i]  ){
+    if ( shams.bAlarm[i] && !shams.bPrevAlarm[i] && shas.bEmails[i] ){
       shams.wSendEmail |=  ( 0x01 << i ) ;
     }
     shams.bPrevAlarm[i] = shams.bAlarm[i] ; 
@@ -598,7 +631,7 @@ long lTD ;
     for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
       if ((( 0x01 << i ) & shams.wSendEmail ) != 0 ){
         SendEmailToClient(i);
-        shams.wSendEmail ^=  ( 0x01 << i ) ;
+        shams.wSendEmail = shams.wSendEmail &  (( 0x01 << i ) ^ 0xffff ) ;
       }
     }
   }

@@ -209,9 +209,31 @@ void handleRoot() {
       }
     }        
 
-    i = String(server.argName(j)).indexOf("tkmx");
+    i = String(server.argName(j)).indexOf("alut1");
     if (i != -1){   
-      shas.fTankMaxTemp = String(server.arg(j)).toFloat() ;
+      shas.fTankUnder1TempAlarm = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("alut2");
+    if (i != -1){   
+      shas.fTankUnder2TempAlarm = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("alota");
+    if (i != -1){   
+      shas.fTankOverTempAlarm = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("alrot");
+    if (i != -1){   
+      shas.fRoofOverTempAlarm  = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("alrut");
+    if (i != -1){   
+      shas.fRoofUnderTempAlarm = String(server.arg(j)).toFloat() ;
+    }        
+
+    
+    i = String(server.argName(j)).indexOf("clmx");
+    if (i != -1){  
+      shas.fCollectorMaxTemp = String(server.arg(j)).toFloat() ;
     }        
     i = String(server.argName(j)).indexOf("clmn");
     if (i != -1){  
@@ -232,6 +254,14 @@ void handleRoot() {
     i = String(server.argName(j)).indexOf("bbtp");
     if (i != -1){  
       shas.fBottomBoostTemp = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("tdtp");
+    if (i != -1){  
+      shas.fTopBoostDiffTemp = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("bdtp");
+    if (i != -1){  
+      shas.fBottomBoostDiffTemp = String(server.arg(j)).toFloat() ;
     }        
     
     i = String(server.argName(j)).indexOf("disop");
@@ -439,7 +469,12 @@ void handleRoot() {
         }
       }
     }
-    
+    for (k = 0 ; k < MAX_TEMP_SENSOR-1 ; k++ ){
+      i = String(server.argName(j)).indexOf("snmp"+String(k));  // reset email flag
+      if (i != -1){                                   
+        shas.sensor[k] = String(server.arg(j)).toInt();
+      }
+    }
   }
 
   SendHTTPHeader();   //  ################### START OF THE RESPONSE  ######
@@ -590,14 +625,32 @@ void handleRoot() {
   if (String(server.uri()).indexOf("settings")>0) {  // ################   SETTINGS    #######################################
     bDefault = false ;
     message = F("<table border=1 title='Solar Water Heater Main SCADA'>") ;
-    message += F("<tr><th>Parameter</th><th>Value</th><th>Units</th><th>.</th></tr>") ;          
-    message += "<tr><form method=post action=" + server.uri() + "><td>Max Tank Temp </td><td align=center><input type='text' name='tkmx' value='"+String(shas.fTankMaxTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>Min Collector Temp </td><td align=center><input type='text' name='clmn' value='"+String(shas.fCollectorMinTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>Solar Temp Diff Max </td><td align=center><input type='text' name='sdmx' value='"+String(shas.fSolarTempDiffMax)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>Solar Temp Diff Min </td><td align=center><input type='text' name='sdmn' value='"+String(shas.fSolarTempDiffMin)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>Top Boost Temp </td><td align=center><input type='text' name='tbtp' value='"+String(shas.fTopBoostTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>Bottom Boost Temp </td><td align=center><input type='text' name='bbtp' value='"+String(shas.fBottomBoostTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>Operating Mode </td><td align=center><input type='text' name='imod' value='"+String(shas.iMode)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += F("<tr><th>Relay Operating Parameters</th><th>Value</th><th>Units</th><th>.</th></tr>") ;          
+    message += "<tr><form method=post action=" + server.uri() + "><td>Max Collector Temp (0-Pump)</td><td align=center><input type='text' name='clmx' value='"+String(shas.fCollectorMaxTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Min Collector Temp (0-Pump)</td><td align=center><input type='text' name='clmn' value='"+String(shas.fCollectorMinTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Solar Temp Diff Max (0-Pump)</td><td align=center><input type='text' name='sdmx' value='"+String(shas.fSolarTempDiffMax)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Solar Temp Diff Min (0-Pump)</td><td align=center><input type='text' name='sdmn' value='"+String(shas.fSolarTempDiffMin)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Top Boost Temp (1-Boost)</td><td align=center><input type='text' name='tbtp' value='"+String(shas.fTopBoostTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Top Boost Diff Temp (1-Boost)</td><td align=center><input type='text' name='tdtp' value='"+String(shas.fTopBoostDiffTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Bottom Boost Temp (2-Boost)</td><td align=center><input type='text' name='bbtp' value='"+String(shas.fBottomBoostTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Bottom Boost Diff Temp (2-Boost)</td><td align=center><input type='text' name='bdtp' value='"+String(shas.fBottomBoostDiffTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    server.sendContent(message) ;
+    message = "" ;
+    
+    message += "<tr><form method=post action=" + server.uri() + "><td>Operating Mode (Pump Action)</td><td align=center><select name='imod'>" ;
+    for ( i = 0 ; i < MAX_MODES ; i++ ){
+        if (shas.iMode == i ){
+          MyCheck = F(" SELECTED ");
+        }else{
+          MyCheck = "";            
+        }
+        switch(i){
+          case 0: pinname = F("Temperature Difference (T1-T3)") ; break;
+          case 1: pinname = F("Time of Day - Sunrise To Sunset") ; break;
+        }
+        message += "<option value="+String(i)+ MyCheck +">" + pinname ;                
+    }
+    message += "</select></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><td colspan=4>.</td></tr>" ;
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPPing[0],ghks.IPPing[1],ghks.IPPing[2],ghks.IPPing[3]);
     message += "<tr><form method=post action=" + server.uri() + "><td>Ping Address</td><td align=center>" ; 
@@ -621,7 +674,7 @@ void handleRoot() {
     server.sendContent(message) ;
     message = "";
     
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Port</td><td align=center><input type='text' name='smpo' value='"+String(SMTP.port)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Port</td><td align=center title='Popular Values 25 , 465 , 2525 , 587'><input type='text' name='smpo' value='"+String(SMTP.port)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Server</td><td align=center><input type='text' name='smse' value='"+String(SMTP.server)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>SMTP User</td><td align=center><input type='text' name='smus' value='"+String(SMTP.user)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Password</td><td align=center><input type='text' name='smpa' value='"+String(SMTP.password)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
@@ -642,14 +695,14 @@ void handleRoot() {
     server.sendContent(message) ;    
 
     message = "<br><b>Alarms</b>" ;
-    message += F("<table border=1 title='Email Alarms'><tr><th>Alarm</th><th>Email</th><th>.</th></tr>") ;
+    message += F("<table border=1 title='Email Alarms'><tr><th>Alarm</th><th>Value</th><th>Email</th><th>.</th></tr>") ;
     for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
       if ( shams.bAlarm[i] ){
         MyColor = "bgcolor='Yellow'" ;
       }else{
         MyColor = "" ;        //bgcolor='red'
       }
-      message += "<tr><form method=post action=" + server.uri() + "><td " + MyColor + ">" + GetAlarmString(i) + "</td>";
+      message += "<tr><form method=post action=" + server.uri() + "><td " + MyColor + ">" + GetAlarmString(i) + "</td><td>"+GetAlarmValue(i)+"</td>";
       if ( ( shas.bEmails[i] ) != 0 ){
         MyCheck = F("CHECKED")  ;    
       }else{
@@ -670,12 +723,7 @@ void handleRoot() {
       }else{
         MyColor = "" ;         //bgcolor='red'
       }
-      switch (i){
-        case 0: MyCheck =  "Pump Relay (T1-T3)"  ;  break; 
-        case 1: MyCheck =  "Boost Element 1 (T2)"  ;    break; 
-        case 2: MyCheck =  "Boost Element 2 (T2)"  ;    break; 
-        case 3: MyCheck =  "Spare "  ;    break; 
-      }      
+      MyCheck = RelayDescription(i) ;      
       message +="<tr><form method=get action=" + server.uri() + "><td align=center " + MyColor + ">" + String(i+1) + "</td><td>"+MyCheck+"</td><td align=center><select name='rbrp"+String(i)+"'>";
       for (k = 0; k < 17; k++) {
         if (shas.relayPort[i] == k ){
@@ -730,7 +778,15 @@ void handleRoot() {
         case 2: MyCheck =  "<b>T4</b> Air Temp"  ;    break; 
         case 3: MyCheck =  "<b>T5</b> Spare Temp"  ;    break; 
       }
-      message += "<tr><td align=center>"+String(i)+"</td><td>"+String(buff)+"</td><td align=center>"+String(shas.sensor[i])+"</td><td>"+MyCheck+"</td><td align=center>"+String(shams.fTemp[i],1)+"</td><td>(C)</td></tr>" ;
+      message += "<tr><td align=center>"+String(i)+"</td><td>"+String(buff)+"</td><td align=center><select name='snmp"+String(i)+"'>" ;
+      for ( i = 0 ; i < (MAX_TEMP_SENSOR-1) ; i++ ){
+        message += "<option value='"+String(i)+"'";
+        if (shas.sensor[i] == i ) {
+          message += " SELECTED " ;
+        }
+        message += ">"+String(i) ; 
+      }
+      message += "</select></td><td>"+MyCheck+"</td><td align=center>"+String(shams.fTemp[i],1)+"</td><td>(C)</td></tr>" ;
     }    
     message += "<tr><td align=center>4</td><td>---AO ---</td><td align=center>X</td><td><b>T1</b> Roof Temp</td><td align=center>"+String(shams.fTemp[4])+"</td><td>(C)</td></tr>" ;
 
@@ -798,15 +854,19 @@ void handleRoot() {
     for ( i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
       if ( shams.bAlarm[i]  ) {
         MyColor = "bgcolor='Yellow'" ;
+        MyCheck = "CLEAR ALARM" ;
       }else{
         MyColor = "" ;         // bgcolor='red'
+        MyCheck = "TEST ALARM" ;
       }
       if ( shas.bEmails[i] == true ){
-        MyCheck2 = "SELECTED" ;
+        MyCheck2 = "- YES -" ;
+        MyNum = "bgcolor='ForestGreen'" ;
       }else{
-        MyCheck2 = " " ;        
+        MyCheck2 = "- NO -" ;        
+        MyNum = "bgcolor='FireBrick'" ;
       }
-      server.sendContent("<tr><form method=get action=" + server.uri() + "><input type='hidden' name='atst"+String(i) +"' value='true'><td "+MyColor+">"+GetAlarmString(i)+"</td><td><input type='checkbox' name='emal'" + String(i) + " " + MyCheck2+ "></td><td><input type='submit' value='Test'></td></form></tr>" ) ;
+      server.sendContent("<tr><form method=get action=" + server.uri() + "><input type='hidden' name='atst"+String(i) +"' value='true'><td "+MyColor+">"+GetAlarmString(i)+"</td><td "+MyNum+">" + MyCheck2+ "</td><td><input type='submit' value='"+MyCheck+"'></td></form></tr>" ) ;
     }
     server.sendContent(F("</table>"));
     
@@ -827,5 +887,29 @@ String GetAlarmString(int iAlarmNo){
         case 6: return("Boost Element 2 Energised ")  ;    break; 
         case 7: return("Controler Rebooted ")  ;    break; 
       }  
+}
+
+String GetAlarmValue(int iAlarmNo){
+      switch (iAlarmNo){
+        case 0: return("<input type='text' name='alut1' value='"+String(shas.fTankUnder1TempAlarm,1)+"' size=10>")  ;  break; 
+        case 1: return("<input type='text' name='alut2' value='"+String(shas.fTankUnder2TempAlarm,1)+"' size=10>") ;    break; 
+        case 2: return("<input type='text' name='alota' value='"+String(shas.fTankOverTempAlarm,1)+"' size=10>")  ;    break; 
+        case 3: return("<input type='text' name='alrot' value='"+String(shas.fRoofOverTempAlarm,1)+"' size=10>")  ;    break; 
+        case 4: return("<input type='text' name='alrut' value='"+String(shas.fRoofUnderTempAlarm,1)+"' size=10>")  ;    break; 
+        case 5: return(String(shas.fTopBoostTemp,1))  ;    break; 
+        case 6: return(String(shas.fBottomBoostTemp,1))  ;    break; 
+        case 7: return("--- NA ---")  ;    break; 
+      }  
+}
+
+
+String RelayDescription(int i){
+    switch (i){
+      case 0: return("Pump Relay (T1-T3)")  ;  break; 
+      case 1: return("Boost Element 1 (T2)")  ;    break; 
+      case 2: return("Boost Element 2 (T2)")  ;    break; 
+      case 3: return("Spare ")  ;    break; 
+    }
+  
 }
 
