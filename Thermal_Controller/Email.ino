@@ -43,9 +43,19 @@ int i ;
     snprintf(buff, BUFF_MAX, "\r\n %d/%02d/%02d %02d:%02d:%02d \r\nNode ID %08X\r\nIP %03u.%03u.%03u.%03u\r\n\r\n", year(), month(), day() , hour(), minute(), second(),ESP.getChipId(), MyIP[0],MyIP[1],MyIP[2],MyIP[3]);
     strcat(csTemp,buff) ;
     WDmail.setBody(csTemp);
-    
-    if (WDmail.send(SMTP.server , SMTP.port , SMTP.user , SMTP.password ) == 0){
-      Serial.println("Mail send OK");
+
+    Serial.println("Server: " + String(SMTP.server));
+    Serial.println("Port: " + String(SMTP.port));
+    Serial.println("User: " + String(SMTP.user));
+    Serial.println("Password: " + String(SMTP.password));
+    if ( SMTP.user[0] == 0 ){
+      if (WDmail.send(SMTP.server , SMTP.port , NULL , NULL ) == 0){
+        Serial.println("Mail send OK");
+      }
+    }else{
+      if (WDmail.send(SMTP.server , SMTP.port , SMTP.user , SMTP.password ) == 0){
+        Serial.println("Mail send OK");
+      }    
     }
   }else{
     Serial.println("Mail not set up proper like dude...");

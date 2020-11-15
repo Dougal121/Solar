@@ -43,7 +43,7 @@ void SendHTTPPageFooter(){
     snprintf(buff, BUFF_MAX, "%u.%u.%u.%u", MyIP[0],MyIP[1],MyIP[2],MyIP[3]);
   }
   server.sendContent("<a href='http://" + String(buff) + ":81/update'>OTA Firmware Update</a><br>");  
-  server.sendContent("<a href='https://github.com/Dougal121/SWH'>Source at GitHub</a><br>");  
+  server.sendContent("<a href='https://github.com/Dougal121/Solar/tree/master/Thermal_Controller'>Source at GitHub</a><br>");  
   server.sendContent("<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br><br>");  
   snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
   server.sendContent("Computer Uptime <b>"+String(buff)+"</b> (day:hr:min) <br>" ) ;
@@ -175,6 +175,38 @@ void handleRoot() {
       ghks.fTimeZone = String(server.arg(j)).toFloat() ;
       ghks.fTimeZone = constrain(ghks.fTimeZone,-12,12);
       bDoTimeUpdate = true ; // trigger and update to fix the time
+    }        
+
+    i = String(server.argName(j)).indexOf("pfrq");
+    if (i != -1){  // 
+      ghks.PingFreq = String(server.arg(j)).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("pmax");
+    if (i != -1){  // 
+      ghks.PingMax = String(server.arg(j)).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("serb");
+    if (i != -1){  // 
+      ghks.SelfReBoot = String(server.arg(j)).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("imod");
+    if (i != -1){  // 
+      shas.iMode = String(server.arg(j)).toInt() ;
+      shas.iMode = constrain(shas.iMode,0,3);
+    }
+    i = String(server.argName(j)).indexOf("mylat");    //lat  
+    if (i != -1){  // have a request to set the latitude
+      ghks.latitude = String(server.arg(j)).toFloat() ;
+      if (( ghks.latitude < -90) || ( ghks.latitude > 90 )){
+        ghks.latitude = -34.051219 ;
+      }
+    }        
+    i = String(server.argName(j)).indexOf("mylon");    // long
+    if (i != -1){  // have a request to set the logitude
+      ghks.longitude = String(server.arg(j)).toFloat() ;
+      if (( ghks.longitude < -180) || ( ghks.longitude > 180 )){
+        ghks.longitude = 142.013618 ;
+      }
     }        
 
     i = String(server.argName(j)).indexOf("tkmx");
@@ -326,6 +358,13 @@ void handleRoot() {
       ghks.IPDNS[2] = String(server.arg(j)).substring(8,11).toInt() ;
       ghks.IPDNS[3] =String(server.arg(j)).substring(12,15).toInt() ;
     }
+    i = String(server.argName(j)).indexOf("ipping");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPPing[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPPing[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPPing[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPPing[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
     
     i = String(server.argName(j)).indexOf("atoff");
     if (i != -1){  // have a request to request a time update
@@ -357,7 +396,49 @@ void handleRoot() {
     if (i != -1){                                    // timesvr
      String(server.arg(j)).toCharArray( ghks.timeServer , sizeof(ghks.timeServer)) ;
     }
+    for (k = 0; k < MAX_RELAY ; k++) {
+      i = String(server.argName(j)).indexOf("actv"+String(k));
+      if (i != -1){                                    // activate relays
+        if (shams.TTG[k] == 0 ){
+          shams.TTG[k] = 5 ; // turn on for 5 minutes
+        }else{
+          shams.TTG[k] = 1 ; // turn off smhortly          
+        }
+      }        
+      i = String(server.argName(j)).indexOf("rbrp"+String(k));  // GPIO pin for relay
+      if (i != -1){                                   
+        shas.relayPort[k] = String(server.arg(j)).toInt() ; // turn on for 5 minutes
+        if ((shas.relayPort[k] <0 )|| (shas.relayPort[k]>16)){
+          shas.relayPort[k] = 12 + k ;
+        }
+      }        
+      i = String(server.argName(j)).indexOf("atrs"+String(k));  // GPIO pin for relay
+      if (i != -1){                                   
+        shas.ActiveValue[k] = String(server.arg(j)).toInt() ; // turn on for 5 minutes
+        if ((shas.ActiveValue[k] != 0 ) && (shas.ActiveValue[k] != 1)){
+          shas.ActiveValue[k] = 0 ;
+        }
+      }    
+    }
+    for (k = 0 ; k < MAX_EMAIL_ALARMS ; k++ ){
+      i = String(server.argName(j)).indexOf("etst"+String(k));  // reset email flag
+      if (i != -1){                                   
+        shas.bEmails[k] = false ;
+      }      
+      i = String(server.argName(j)).indexOf("emal"+String(k));  // set email flag if the 'on' tag exists
+      if (i != -1){                                   
+        shas.bEmails[k] = true ;
+      }    
 
+      i = String(server.argName(j)).indexOf("atst"+String(k));  // reset email flag
+      if (i != -1){                                   
+        if ( shams.bAlarm[k] == false ) {
+          shams.bAlarm[k] = true ;
+        }else{
+          shams.bAlarm[k] = false ;
+        }
+      }
+    }
     
   }
 
@@ -516,6 +597,7 @@ void handleRoot() {
     message += "<tr><form method=post action=" + server.uri() + "><td>Solar Temp Diff Min </td><td align=center><input type='text' name='sdmn' value='"+String(shas.fSolarTempDiffMin)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>Top Boost Temp </td><td align=center><input type='text' name='tbtp' value='"+String(shas.fTopBoostTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>Bottom Boost Temp </td><td align=center><input type='text' name='bbtp' value='"+String(shas.fBottomBoostTemp)+"' size=30></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Operating Mode </td><td align=center><input type='text' name='imod' value='"+String(shas.iMode)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><td colspan=4>.</td></tr>" ;
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPPing[0],ghks.IPPing[1],ghks.IPPing[2],ghks.IPPing[3]);
     message += "<tr><form method=post action=" + server.uri() + "><td>Ping Address</td><td align=center>" ; 
@@ -528,6 +610,17 @@ void handleRoot() {
     message = "" ;
     
     message += "<tr><td colspan=4>.</td></tr>" ;
+    message += "<form method=post action=" + server.uri() + "><tr><td>Latitude +N -S</td><td align=center><input type='text' name='mylat' value='" ; 
+    message += String(ghks.latitude,8);
+    message += "' size=30></td><td>.</td><td><input type='submit' value='SET'></td></tr></form>" ; 
+
+    message += "<form method=post action=" + server.uri() + "><tr><td>Longitude +E -W</td><td align=center><input type='text' name='mylon' value='" ; 
+    message += String(ghks.longitude,8);
+    message += "' size=30></td><td>.</td><td><input type='submit' value='SET'></td></tr></form>" ; 
+    message += "<tr><td colspan=4>.</td></tr>" ;
+    server.sendContent(message) ;
+    message = "";
+    
     message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Port</td><td align=center><input type='text' name='smpo' value='"+String(SMTP.port)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Server</td><td align=center><input type='text' name='smse' value='"+String(SMTP.server)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     message += "<tr><form method=post action=" + server.uri() + "><td>SMTP User</td><td align=center><input type='text' name='smus' value='"+String(SMTP.user)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
@@ -548,33 +641,49 @@ void handleRoot() {
     message += F("</table>");
     server.sendContent(message) ;    
 
-    message = "" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td colspan=3>" ;
+    message = "<br><b>Alarms</b>" ;
+    message += F("<table border=1 title='Email Alarms'><tr><th>Alarm</th><th>Email</th><th>.</th></tr>") ;
     for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
+      if ( shams.bAlarm[i] ){
+        MyColor = "bgcolor='Yellow'" ;
+      }else{
+        MyColor = "" ;        //bgcolor='red'
+      }
+      message += "<tr><form method=post action=" + server.uri() + "><td " + MyColor + ">" + GetAlarmString(i) + "</td>";
       if ( ( shas.bEmails[i] ) != 0 ){
         MyCheck = F("CHECKED")  ;    
       }else{
         MyCheck = F("")  ;    
       }
-      switch (i){
-        case 0: MyNum =  "<b>Tank Top </b>"  ;  break; 
-      }
-      message += "<td align=center><input type='checkbox' name='emal'" + String(i) + " " + String(MyCheck)+ "></td>" ;
-    
+      message += "<td align=center><input type='hidden' name='etst"+String(i) +"' value='true'><input type='checkbox' name='emal" + String(i) + "' " + String(MyCheck)+ "></td>" ;
+      message += "</td><td><input type='submit' value='SET'></td></form></tr>" ;  
     }
-    message += "</td><td><input type='submit' value='SET'></td></tr>" ;
+    message += F("</table>");
     server.sendContent(message);
-    message = "" ;
-
-    for (j = 0; j < MAX_RELAY ; i++) {
-      message +="<tr><form method=get action=" + server.uri() + "><td>Relay " + String(j) + " Pin</td><td align=center><select name='rbrp'+String(j)>";
-      for (i = 0; i < 17; i++) {
-        if (shas.relayPort[j] == i ){
-          MyColor = F(" SELECTED ");
+    
+    message = "<br>Relay Setup" ;
+    message += F("<table border=1 title='Relay Setup'>") ;
+    message += F("<tr><th>Relay</th><th>Function</th><th>CPU Pin</th><th>Active State</th><th>.</th></tr>") ;
+    for (i = 0; i < MAX_RELAY ; i++) {
+      if ( shams.bRelayState[i] ==  shas.ActiveValue[i] ){
+        MyColor = "bgcolor='Yellow'" ;
+      }else{
+        MyColor = "" ;         //bgcolor='red'
+      }
+      switch (i){
+        case 0: MyCheck =  "Pump Relay (T1-T3)"  ;  break; 
+        case 1: MyCheck =  "Boost Element 1 (T2)"  ;    break; 
+        case 2: MyCheck =  "Boost Element 2 (T2)"  ;    break; 
+        case 3: MyCheck =  "Spare "  ;    break; 
+      }      
+      message +="<tr><form method=get action=" + server.uri() + "><td align=center " + MyColor + ">" + String(i+1) + "</td><td>"+MyCheck+"</td><td align=center><select name='rbrp"+String(i)+"'>";
+      for (k = 0; k < 17; k++) {
+        if (shas.relayPort[i] == k ){
+          MyCheck = F(" SELECTED ");
         }else{
-          MyColor = "";            
+          MyCheck = "";            
         }
-        switch(i){
+        switch(k){
           case 0: pinname = F("GPIO 0 - D3") ; break;
           case 1: pinname = F("GPIO 1 - D1 TXD0") ; break;
           case 2: pinname = F("GPIO 2 - D9 BUILTIN LED") ; break;
@@ -593,22 +702,38 @@ void handleRoot() {
           case 15: pinname = F("GPIO 15 - D10 -  TXD2") ; break;
           case 16: pinname = F("GPIO 16 - D2 -  Wake") ; break;
         }
-        message += "<option value="+String(i)+ MyColor +">" + pinname ;          
+        message += "<option value="+String(k)+ MyCheck +">" + pinname ;          
       }
       message += "</select></td>" ;
       
-      message += "<td>Active State</td><td align=center>" ; 
-      message += "<select name='atrs'+String(j)>"  ;
-      if ( shas.ActiveValue[j] == 0 ){
+      message += "<td align=center><select name='atrs"+String(i)+"'>" ; 
+      if ( shas.ActiveValue[i] == 0 ){
         message += F("<option value='0' SELECTED>0 LOW"); 
         message += F("<option value='1'>1 HGH"); 
       }else{
         message += F("<option value='0'>0 LOW"); 
         message += F("<option value='1' SELECTED>1 HIGH"); 
       }
-      message += F("</select></td><td></td><td><input type='submit' value='SET'></td></form></tr>");
+      message += F("</select></td><td><input type='submit' value='SET'></td></form></tr>");
     }
-    
+    message += F("</table>");
+    server.sendContent(message) ;    
+
+    message = "<br>Temperature Sender Setup" ;
+    message += F("<table border=1 title='Temperature Sender Setup'>") ;
+    message += F("<tr><th>Temp Sensor No</th><th>Address</th><th>Mapped to</th><th>Description</th><th>Current Temp</th><th>(C)</th></tr>") ;
+    for ( i = 0 ; i < (MAX_TEMP_SENSOR-1) ; i++ ){
+      snprintf(buff, BUFF_MAX, "%02X%02X%02X%02X%02X%02X%02X%02X\0",Thermometer[shas.sensor[i]][0],Thermometer[shas.sensor[i]][1],Thermometer[shas.sensor[i]][2],Thermometer[shas.sensor[i]][3],Thermometer[shas.sensor[i]][4],Thermometer[shas.sensor[i]][5],Thermometer[shas.sensor[i]][6],Thermometer[shas.sensor[i]][7]  );         
+      switch (i){
+        case 0: MyCheck =  "<b>T2</b> Tank Top " ;  break; 
+        case 1: MyCheck =  "<b>T3</b> Tank Bottom"  ;    break; 
+        case 2: MyCheck =  "<b>T4</b> Air Temp"  ;    break; 
+        case 3: MyCheck =  "<b>T5</b> Spare Temp"  ;    break; 
+      }
+      message += "<tr><td align=center>"+String(i)+"</td><td>"+String(buff)+"</td><td align=center>"+String(shas.sensor[i])+"</td><td>"+MyCheck+"</td><td align=center>"+String(shams.fTemp[i],1)+"</td><td>(C)</td></tr>" ;
+    }    
+    message += "<tr><td align=center>4</td><td>---AO ---</td><td align=center>X</td><td><b>T1</b> Roof Temp</td><td align=center>"+String(shams.fTemp[4])+"</td><td>(C)</td></tr>" ;
+
     message += F("</table>");
     server.sendContent(message) ;    
 
@@ -624,63 +749,64 @@ void handleRoot() {
     }
     server.sendContent(F("</table><br><table border=1 title='Temperatures'>"));
     server.sendContent(F("<tr><th><b>Location</th><th align=center><b>Address</b></th><th align=center><b>Current Value</b></th><th>Units</th></tr>")) ;
-    server.sendContent("<tr><td>Roof Temp</td><td align=center> - Analog A0 - </td><td align=center>" + String(shams.fTemp[4],1) + "</td><td align=center>(C)</td></tr>" ) ;
+    server.sendContent("<tr><td><b>T1</b> Roof Temp</td><td align=center> - Analog A0 - </td><td align=center>" + String(shams.fTemp[4],1) + "</td><td align=center>(C)</td></tr>" ) ;
     
     for ( i = 0 ; i < 4 ; i++ ){
       MyColor = "" ; 
-      snprintf(buff, BUFF_MAX, "%02X%02X%02X%02X%02X%02X%02X%02X",Thermometer[shas.sensor[i]][0],Thermometer[shas.sensor[i]][1],Thermometer[shas.sensor[i]][2],Thermometer[shas.sensor[i]][3],Thermometer[shas.sensor[i]][4],Thermometer[shas.sensor[i]][5],Thermometer[shas.sensor[i]][6],Thermometer[shas.sensor[i]][7]  );   
+      snprintf(buff, BUFF_MAX, "%02X%02X%02X%02X%02X%02X%02X%02X\0",Thermometer[shas.sensor[i]][0],Thermometer[shas.sensor[i]][1],Thermometer[shas.sensor[i]][2],Thermometer[shas.sensor[i]][3],Thermometer[shas.sensor[i]][4],Thermometer[shas.sensor[i]][5],Thermometer[shas.sensor[i]][6],Thermometer[shas.sensor[i]][7]  );   
       switch (i){
-        case 0: MyCheck =  "<b>Tank Top </b>"  ; MyColor = "<b>" ;  break; 
-        case 1: MyCheck =  "Tank Bottom"  ;    break; 
-        case 2: MyCheck =  "Air Temp"  ;    break; 
-        case 3: MyCheck =  "Spare Temp"  ;    break; 
+        case 0: MyCheck =  "<b>T2 Tank Top </b>"  ; MyColor = "<b>" ;  break; 
+        case 1: MyCheck =  "<b>T3</b> Tank Bottom"  ;    break; 
+        case 2: MyCheck =  "<b>T4</b> Air Temp"  ;    break; 
+        case 3: MyCheck =  "<b>T5</b> Spare Temp"  ;    break; 
       }
       server.sendContent("<tr><td>" + MyCheck + "</td><td align=center>" + String(buff) + "</td><td align=center>" + MyColor + String(shams.fTemp[i],1) + "</td><td align=center>(C)</td></tr>" ) ;
     }    
-    server.sendContent(F("</table>"));
+    server.sendContent(F("<tr><td>Sunrise - State - Sunset</td><td colspan=2 align=center>"));
+    snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(SolarApp.sunrise), MinSolarTime(SolarApp.sunrise));
+    server.sendContent(String(buff)) ; 
+    if ( SolarApp.iDayNight == 1 ){
+      server.sendContent(F(" - DAY - "));
+    }else{
+      server.sendContent(F(" - NIGHT - "));          
+    }
+    snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(SolarApp.sunset), MinSolarTime(SolarApp.sunset));        
+    server.sendContent(String(buff)) ; 
+    server.sendContent(F("</td><td>(hh:mm)</td></tr>"));
+    server.sendContent(F("</table><br>Relays"));
     
     server.sendContent(F("<table><br><table border=1 title='Relays'>"));
-    server.sendContent("<tr><th>Function</th><th>GPIO Pin</th><th>Manual</th><th>Timer(s)</th></tr>" ) ;
-    for ( i = 0 ; i < 4 ; i++ ){
-      if ( digitalRead(shas.relayPort[i]) ==  shas.ActiveValue[i] ){
-        MyColor = "bgcolor='green'" ;
+    server.sendContent("<tr><th>Relay No</th><th>Function</th><th>GPIO Pin</th><th>Manual</th><th>Timer(s)</th></tr>" ) ;
+    for ( i = 0 ; i < MAX_RELAY ; i++ ){
+      if ( shams.bRelayState[i] ==  shas.ActiveValue[i] ){
+        MyColor = "bgcolor='Yellow'" ;
       }else{
-        MyColor = "bgcolor='red'" ;        
+        MyColor = "" ;        // bgcolor='red'
       }
       switch (i){
-        case 0: MyCheck =  "Pump Relay"  ;  break; 
-        case 1: MyCheck =  "Boost Element 1"  ;    break; 
-        case 2: MyCheck =  "Boost Element 2"  ;    break; 
+        case 0: MyCheck =  "Pump Relay (T1-T3)"  ;  break; 
+        case 1: MyCheck =  "Boost Element 1 (T2)"  ;    break; 
+        case 2: MyCheck =  "Boost Element 2 (T2)"  ;    break; 
         case 3: MyCheck =  "Spare "  ;    break; 
       }
-      server.sendContent("<tr><form method=get action=" + server.uri() + "><td "+String(MyColor)+">" + String(MyCheck) + "</td><td align=center>"+String(shas.relayPort[i])+"</td><td><input type='submit' value='Activate'><input type='hidden' name='actv'+String(i) value='true'></td><td align=center>"+String(shams.TTG[i])+"</form></tr>" ) ;
+      server.sendContent("<tr><form method=get action=" + server.uri() + "><td align=center "+String(MyColor)+">"+String(i)+"</td><td "+String(MyColor)+">" + String(MyCheck) + "</td><td align=center>"+String(shas.relayPort[i])+"</td><td><input type='submit' value='Activate'><input type='hidden' name='actv"+String(i)+"' value='true'></td><td align=center>"+String(shams.TTG[i])+"</td></form></tr>" ) ;
     }
     server.sendContent(F("</table>"));
 
-    server.sendContent(F("<br>Alarms<table><br><table border=1 title='Alarms'>"));
+    server.sendContent(F("<br><b>Alarms</b><table><br><table border=1 title='Alarms'>"));
     server.sendContent("<tr><th>Alarm</th><th>Email</th><th>Test</th></tr>" ) ;
     for ( i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
-      switch (i){
-        case 0: MyCheck =  "Water Luke Warm "  ;  break; 
-        case 1: MyCheck =  "Water Cold "  ;    break; 
-        case 2: MyCheck =  "Water Over Temp "  ;    break; 
-        case 3: MyCheck =  "Roof Collector Over Temp "  ;    break; 
-        case 4: MyCheck =  "Roof Collector Under Temp "  ;    break; 
-        case 5: MyCheck =  "Boost Element 1 Energised "  ;    break; 
-        case 6: MyCheck =  "Boost Element 2 Energised "  ;    break; 
-        case 7: MyCheck =  "Controler Rebooted "  ;    break; 
-      }
-      if ( shas.bAlarm[i] == true ) {
-        MyColor = "bgcolor='green'" ;
+      if ( shams.bAlarm[i]  ) {
+        MyColor = "bgcolor='Yellow'" ;
       }else{
-        MyColor = "bgcolor='red'" ;        
+        MyColor = "" ;         // bgcolor='red'
       }
       if ( shas.bEmails[i] == true ){
         MyCheck2 = "SELECTED" ;
       }else{
         MyCheck2 = " " ;        
       }
-      server.sendContent("<tr><form method=get action=" + server.uri() + "><td "+MyColor+">"+MyCheck+"</td><td><input type='checkbox' name='emal'" + String(i) + " " + MyCheck2+ "></td><td><input type='submit' value='Test'><input type='hidden' name='etst'+String(i) value='true'></td></form></tr>" ) ;
+      server.sendContent("<tr><form method=get action=" + server.uri() + "><input type='hidden' name='atst"+String(i) +"' value='true'><td "+MyColor+">"+GetAlarmString(i)+"</td><td><input type='checkbox' name='emal'" + String(i) + " " + MyCheck2+ "></td><td><input type='submit' value='Test'></td></form></tr>" ) ;
     }
     server.sendContent(F("</table>"));
     
@@ -688,5 +814,18 @@ void handleRoot() {
 
   SendHTTPPageFooter();
 
+}
+
+String GetAlarmString(int iAlarmNo){
+      switch (iAlarmNo){
+        case 0: return("Water Luke Warm (T2)")  ;  break; 
+        case 1: return("Water Cold (T2)") ;    break; 
+        case 2: return("Water Over Temp (T2)")  ;    break; 
+        case 3: return("Roof Collector Over Temp (T1)")  ;    break; 
+        case 4: return("Roof Collector Under Temp (T1)")  ;    break; 
+        case 5: return("Boost Element 1 Energised ")  ;    break; 
+        case 6: return("Boost Element 2 Energised ")  ;    break; 
+        case 7: return("Controler Rebooted ")  ;    break; 
+      }  
 }
 

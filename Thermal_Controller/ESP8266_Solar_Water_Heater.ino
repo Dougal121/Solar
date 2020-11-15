@@ -78,11 +78,14 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   float   fSolarTempDiffMin ;
   float   fTopBoostTemp ;
   float   fBottomBoostTemp ; 
-  uint8_t sensor[4] ;                   // which sensor is where
+  float   fTopBoostDiffTemp ;
+  float   fBottomBoostDiffTemp ; 
+  uint8_t sensor[MAX_TEMP_SENSOR] ;                   // which sensor is where
   uint8_t relayPort[MAX_RELAY] ;
-  uint8_t ActiveValue[MAX_RELAY];
+  uint8_t ActiveValue[MAX_RELAY] ;
   uint8_t relayMinActivate[MAX_RELAY] ;         // Min activation time 
   int     iMode ;                       // operation mode
+  int     iBoostMode ;                       // operation mode
   float   fAnalogMult ;                 // calibration factors for adc channel  
   float   fAnalogAdd ;
   float   fTankOverTempAlarm ;
@@ -92,6 +95,8 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   float   fRoofUnderTempAlarm ;
   bool    bEmails[MAX_EMAIL_ALARMS] ; 
   bool    bAlarm[MAX_EMAIL_ALARMS] ; 
+  bool    bBoostTimes[48] ;           // half hour time slots for off peak power timer
+  byte    Boost_wdays   ;             // days of wek plus an enable SOP
 } Solar_Heater_App_stuff_t ;          // computer says it's 136 not 130 ??? is my maths crap ????
 
 Solar_Heater_App_stuff_t shas ;
@@ -136,6 +141,7 @@ float fTemp[MAX_TEMP_SENSOR];
 bool  bRelayState[MAX_RELAY] ;
 int   TTG[MAX_RELAY] ;
 bool  bAlarm[MAX_EMAIL_ALARMS] ;
+bool  bPrevAlarm[MAX_EMAIL_ALARMS] ;
 } Solar_Heater_App_memory_stuff_t ;         
 
 Solar_Heater_App_memory_stuff_t shams ;
@@ -404,7 +410,11 @@ int i , k , j = 0;
   Serial.print(sensors.getDeviceCount(), DEC);
   Serial.println(" Temperature devices found.");
 
-
+  for ( i = 0 ; i < MAX_RELAY ; i++ ){
+    if (( shas.relayPort[i] < 17 ) && ( shas.relayPort[i] >= 0 )){  // check if its rubbish bfore doing it
+      pinMode(shas.relayPort[i],OUTPUT);  // relay ouputs initalise
+    }
+  }
   
 }
 
@@ -416,6 +426,7 @@ int x , y ;
 bool bSendCtrlPacket ;
 bool bDirty = false ;
 bool bDirty2 = false ;
+String csTmp ;
 long lTD ; 
   
   server.handleClient();
@@ -464,12 +475,35 @@ long lTD ;
 //    display.drawString(0, 40 , String("Air    " ) + String(shams.fTemp[2],1) + " (C)") ;
 //    display.drawString(0, 50 , String("Spare  " ) + String(shams.fTemp[3],1) + " (C)") ;
 
+    csTmp = "" ;
+    for ( i = 0 ; i < MAX_RELAY ; i++ ){
+      if (shams.bRelayState[MAX_RELAY - 1 - i] ==  shas.ActiveValue[MAX_RELAY - 1 - i]) {
+        csTmp += String(MAX_RELAY - 1 - i) ;
+      }else{
+        csTmp += "_" ;        
+      }
+    }
+    display.setTextAlignment(TEXT_ALIGN_RIGHT);
+    display.drawString(128, 20 , csTmp ) ;
+    csTmp = "" ;
+    for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
+      if ( shams.bAlarm[MAX_EMAIL_ALARMS - 1 - i] ){
+        csTmp += String(MAX_EMAIL_ALARMS - 1 - i) ;
+      }else{
+        csTmp += "_" ;        
+      }
+    }
+    display.setTextAlignment(TEXT_ALIGN_RIGHT);
+    display.drawString(128, 10 , csTmp ) ;
+
     display.setTextAlignment(TEXT_ALIGN_CENTER);
     snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));    
     display.drawString(63 , 43, String(buff));
     display.display();
 
-    switch(shas.iMode){        // selected operational mode for pump
+    for ( i = 0 ; i < MAX_RELAY ; i++ ){
+    }
+    switch(shas.iMode){        // selected operational mode for pump  work out that has to be on
       case 0:                  // temp differental control
         if (( shams.fTemp[0] - shams.fTemp[2]) > shas.fSolarTempDiffMax ) { // turn on the pump relay   (collector - tank bottom)
           shams.bRelayState[0] = shas.ActiveValue[0] ;
@@ -491,8 +525,25 @@ long lTD ;
       case 2:                  // ?
       break;
     }
+
+    if ( shams.fTemp[0] < shas.fTopBoostTemp ){
+      shams.bRelayState[1] = shas.ActiveValue[1] ;
+    }
+    if ( shams.fTemp[0] > ( shas.fTopBoostTemp + 2.0 )){
+      shams.bRelayState[1] = !shas.ActiveValue[1] ;      
+    }
+    if ( shams.fTemp[1] < shas.fBottomBoostTemp ){
+      shams.bRelayState[2] = shas.ActiveValue[2] ;
+    }
+    if ( shams.fTemp[1] > ( shas.fBottomBoostTemp + 2.0 )){
+      shams.bRelayState[2] = !shas.ActiveValue[2] ;      
+    }
+    
     for ( i = 0 ; i < MAX_RELAY ; i++ ){
-      if (( shas.relayPort[i] > -1 ) && ( shas.relayPort[i] < 17 )){    // write active status to ports if they look remotely correct
+      if (shams.TTG[i] > 0 ) {   // if yo have done an activate then switch it on for test
+        shams.bRelayState[i] = shas.ActiveValue[i] ;
+      }
+      if (( shas.relayPort[i] >= 0 ) && ( shas.relayPort[i] < 17 )){    // write active status to ports if they look remotely correct
         digitalWrite( shas.relayPort[i] , shams.bRelayState[i] );
       }
     }
@@ -511,6 +562,14 @@ long lTD ;
     }
     DoSolarCalcs();
     rtc_min = minute() ;
+    for ( i = 0 ; i < MAX_RELAY ; i++ ){
+      if (shams.TTG[i] > 0 ) {
+        shams.TTG[i]-- ;
+        if (shams.TTG[i] == 0 ){
+          shams.bRelayState[i] = !shas.ActiveValue[i] ;  // set to inactive then timer expires
+        }
+      }
+    }
   }
   
   if ( rtc_hour != hour()) {   // once a day do a time update or once an hour if not set yet
@@ -526,6 +585,13 @@ long lTD ;
   lRet = ntpudp.parsePacket() ; // this is actually server not a client ie we are doing time
   if ( lRet != 0 ) {
     processNTPpacket();
+  }
+
+  for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){                  // do the single shot on alarm messages
+    if ( shams.bAlarm[i] && !shams.bPrevAlarm[i]  ){
+      shams.wSendEmail |=  ( 0x01 << i ) ;
+    }
+    shams.bPrevAlarm[i] = shams.bAlarm[i] ; 
   }
 
   if (( shams.wSendEmail != 0 )&& WiFi.isConnected())  {
