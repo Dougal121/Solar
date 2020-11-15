@@ -769,7 +769,7 @@ void handleRoot() {
 
     message = "<br>Temperature Sender Setup" ;
     message += F("<table border=1 title='Temperature Sender Setup'>") ;
-    message += F("<tr><th>Temp Sensor No</th><th>Address</th><th>Mapped to</th><th>Description</th><th>Current Temp</th><th>(C)</th></tr>") ;
+    message += "<tr><th>Temp Sensor No</th><th>Address</th><th>Mapped to</th><th>Description</th><th>Current Temp</th><th>(C)</th>.<th></th></tr>" ;
     for ( i = 0 ; i < (MAX_TEMP_SENSOR-1) ; i++ ){
       snprintf(buff, BUFF_MAX, "%02X%02X%02X%02X%02X%02X%02X%02X\0",Thermometer[shas.sensor[i]][0],Thermometer[shas.sensor[i]][1],Thermometer[shas.sensor[i]][2],Thermometer[shas.sensor[i]][3],Thermometer[shas.sensor[i]][4],Thermometer[shas.sensor[i]][5],Thermometer[shas.sensor[i]][6],Thermometer[shas.sensor[i]][7]  );         
       switch (i){
@@ -778,15 +778,15 @@ void handleRoot() {
         case 2: MyCheck =  "<b>T4</b> Air Temp"  ;    break; 
         case 3: MyCheck =  "<b>T5</b> Spare Temp"  ;    break; 
       }
-      message += "<tr><td align=center>"+String(i)+"</td><td>"+String(buff)+"</td><td align=center><select name='snmp"+String(i)+"'>" ;
-      for ( i = 0 ; i < (MAX_TEMP_SENSOR-1) ; i++ ){
-        message += "<option value='"+String(i)+"'";
-        if (shas.sensor[i] == i ) {
+      message += "<tr><form method=get action=" + server.uri() + "><td align=center>"+String(i)+"</td><td>"+String(buff)+"</td><td align=center><select name='snmp"+String(i)+"'>" ;
+      for ( k = 0 ; k < (MAX_TEMP_SENSOR-1) ; k++ ){
+        message += "<option value='"+String(k)+"'";
+        if (shas.sensor[i] == k ) {
           message += " SELECTED " ;
         }
-        message += ">"+String(i) ; 
+        message += ">"+String(k) ; 
       }
-      message += "</select></td><td>"+MyCheck+"</td><td align=center>"+String(shams.fTemp[i],1)+"</td><td>(C)</td></tr>" ;
+      message += "</select></td><td>"+MyCheck+"</td><td align=center>"+String(shams.fTemp[i],1)+"</td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
     }    
     message += "<tr><td align=center>4</td><td>---AO ---</td><td align=center>X</td><td><b>T1</b> Roof Temp</td><td align=center>"+String(shams.fTemp[4])+"</td><td>(C)</td></tr>" ;
 

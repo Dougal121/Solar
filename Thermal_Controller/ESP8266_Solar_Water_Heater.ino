@@ -137,12 +137,14 @@ Solar_App_stuff_t SolarApp  ;
 
 
 typedef struct __attribute__((__packed__)) {     // memory stuff
-uint16_t wSendEmail ;
-float fTemp[MAX_TEMP_SENSOR];
-bool  bRelayState[MAX_RELAY] ;
-int   TTG[MAX_RELAY] ;
-bool  bAlarm[MAX_EMAIL_ALARMS] ;
-bool  bPrevAlarm[MAX_EMAIL_ALARMS] ;
+  uint16_t wSendEmail ;
+  float fTemp[MAX_TEMP_SENSOR];
+  bool  bRelayState[MAX_RELAY] ;
+  int   TTG[MAX_RELAY] ;
+  bool  bAlarm[MAX_EMAIL_ALARMS] ;
+  bool  bPrevAlarm[MAX_EMAIL_ALARMS] ;
+  bool bDoReboot = false ;
+  long iPingTime = -1 ;
 } Solar_Heater_App_memory_stuff_t ;         
 
 Solar_Heater_App_memory_stuff_t shams ;
@@ -190,7 +192,7 @@ long  MyTestSum ;
 long lTimePrev ;
 long lTimePrev2 ;
 long lMinUpTime = 0 ;
-
+long lMinPingPeriod = 0 ; 
 long lRebootCode = 0 ;
 struct ts tc;  
 bool bPrevConnectionStatus = false;
@@ -579,6 +581,7 @@ long lTD ;
   if ( rtc_min != minute()) {
     GetTempLogs(); // grab the data if there is any
     lMinUpTime++ ;
+    lMinPingPeriod++ ;
      if ((bDoTimeUpdate)) {  // not the correct time try to fix every minute
       sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server
       bDoTimeUpdate = false ;
@@ -595,6 +598,30 @@ long lTD ;
           shams.bRelayState[i] = !shas.ActiveValue[i] ;  // set to inactive then timer expires
         }
       }
+    }
+    if ((( lMinUpTime > ghks.SelfReBoot ) && (ghks.SelfReBoot > 10 )) || shams.bDoReboot ) {
+      if ( shas.bEmails[7] ) {
+        SendEmailToClient(7);
+      }
+      ESP.reset() ;
+    }
+    if (( lMinPingPeriod > ghks.PingFreq )&&( ghks.PingFreq > 10 )) {
+      if (WiFi.isConnected())  { // dont ping if no wifi
+        if ((ghks.IPPing[0] != 0) ) {  // ping address is valid
+          if ( Ping.ping(ghks.IPPing,4) ){
+            shams.iPingTime = Ping.averageTime() ;
+            if (( shams.iPingTime > ghks.PingMax  ) && (ghks.PingMax > 0 )) {
+              shams.bDoReboot = true ;            
+            }
+          }else{
+            shams.iPingTime = -1 ; 
+            shams.bDoReboot = true ;      
+          }
+        }
+      }else{
+        shams.iPingTime = -2 ;
+      }
+      lMinPingPeriod = 0 ; // reset the counter
     }
   }
   
