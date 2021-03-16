@@ -17,38 +17,47 @@ String message ;
 }
 
 void SendHTTPHeader(){
+String message ;
   server.sendHeader(F("Server"),F("ESP8266-on-ice"),false);
   server.sendHeader(F("X-Powered-by"),F("Dougal-1.0"),false);
+  if (shams.bDoGetWeather){
+    server.sendHeader(F("Refresh"),F("30"),false);  
+  }
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", "");
-  server.sendContent(F("<!DOCTYPE HTML>"));
-  server.sendContent("<head><title>Team Trouble - Solar Water Heater Controller SCADA " + String(Toleo) + "</title>");
-  server.sendContent(F("<meta name=viewport content='width=320, auto inital-scale=1'>"));
-  server.sendContent(F("</head><body><html lang='en'><center><h3>"));   
-  server.sendContent("<a title='click for home / refresh' href='/'>"+String(ghks.NodeName)+"</a></h3>");
+  message = F("<!DOCTYPE HTML>") ;
+  message += "<head><title>Team Trouble - Solar Water Heater Controller SCADA " + String(Toleo) + "</title>";
+  message += F("<meta name=viewport content='width=320, auto inital-scale=1'>");
+  message += F("</head><body><html lang='en'><center><h3>");   
+  message += "<a title='click for home / refresh' href='/'>"+String(ghks.NodeName)+"</a></h3>";
+  server.sendContent(message);
 }
 
 
 
 void SendHTTPPageFooter(){
-  server.sendContent(F("<br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br><a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>")) ;     
-  server.sendContent("<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>");
-  server.sendContent(F("<a href='/eeprom'>EEPROM Memory Contents</a><br>"));
-  server.sendContent(F("<a href='/setup'>Node Setup</a><br>"));
-  server.sendContent(F("<a href='/info'>Node Infomation</a><br>"));
-  server.sendContent(F("<a href='/settings'>Solar Settings</a><br>"));
-  if (!WiFi.isConnected()) {
+String message ;
+  message = F("<br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br><a href='/?command=665'>Sync UTP Time</a><br><a href='/?command=5'>Manual Get Weather</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>") ;     
+  message += "<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>";
+  message += F("<a href='/eeprom'>EEPROM Memory Contents</a><br>");
+  message += F("<a href='/setup'>Node Setup</a><br>");
+  message += F("<a href='/info'>Node Infomation</a><br>");
+  message += F("<a href='/settings'>Solar Settings</a><br>");
+  message += F("<a href='/email'>Email Settings</a><br>");
+  message += F("<a href='/weather'>Open Weather Forcast</a><br>");
+  if (!WiFi.isConnected() || (( MyIP[0]==0) && (MyIP[3]==0))) {
     snprintf(buff, BUFF_MAX, "%u.%u.%u.%u", MyIPC[0],MyIPC[1],MyIPC[2],MyIPC[3]);
   }else{
     snprintf(buff, BUFF_MAX, "%u.%u.%u.%u", MyIP[0],MyIP[1],MyIP[2],MyIP[3]);
   }
-  server.sendContent("<a href='http://" + String(buff) + ":81/update'>OTA Firmware Update</a><br>");  
-  server.sendContent("<a href='https://github.com/Dougal121/Solar/tree/master/Thermal_Controller'>Source at GitHub</a><br>");  
-  server.sendContent("<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br><br>");  
+  message += "<a href='http://" + String(buff) + ":81/update'>OTA Firmware Update</a><br>";  
+  message += "<a href='https://github.com/Dougal121/Solar/tree/master/Thermal_Controller'>Source at GitHub</a><br>";  
+  message += "<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br><br>";  
   snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
-  server.sendContent("Computer Uptime <b>"+String(buff)+"</b> (day:hr:min) <br>" ) ;
-  
-  server.sendContent(F("</body></html>\r\n"));
+  message += "Computer Uptime <b>"+String(buff)+"</b> (day:hr:min) <br>"  ;
+  message += F("</body></html>\r\n");
+
+  server.sendContent(message);
 }
 
 
@@ -74,14 +83,10 @@ void handleRoot() {
   tmElements_t tm;
   long  i = 0 ;
   int ii  ;
-  int iProgNum = 0;
   int j ;
   int k , kk , iTmp ;
   boolean bExtraValve = false ;
-  uint8_t iPage = 0 ;
-  int iAType = 0 ;
   boolean bDefault = true ;
-//  int td[6];
   long lTmp ; 
   String MyCheck , MyColor , MyNum , MyCheck2 ;
   String pinname ;
@@ -102,16 +107,12 @@ void handleRoot() {
           LoadParamsFromEEPROM(false);
 //          Serial.println("Save to EEPROM");
         break;
-        case 3: // valve setup
-          bExtraValve = true ;  // makes the option active
-          iPage = 1 ;
+        case 3: // 
         break;
         case 4: // 
-          bExtraValve = true ;  // makes the option active
-          iPage = 2 ;
         break;
-        case 5: // Fertigation
-          iPage = 2 ;
+        case 5: // manual get weather
+          shams.bDoGetWeather = true ;
         break;
         case 8: //  Cold Reboot
           ESP.reset() ;
@@ -135,6 +136,30 @@ void handleRoot() {
         break;
       }  
     }
+
+    i = String(server.argName(j)).indexOf("hr"  );
+    if (i != -1) { //
+      if ( String(server.arg(j)).toInt()  == 0 ) {
+        for ( k = 0 ; k < 24 ; k++) { // handle all the valve control commands for any and all valves
+          shas.bBoostTimes[k] = false ;
+        }
+      } else {
+        for ( k = 24 ; k < 48 ; k++) { // handle all the valve control commands for any and all valves
+          shas.bBoostTimes[k] = false ;
+        }
+      }
+    }
+    for ( k = 0 ; k < 48 ; k++) { // handle all the valve control commands for any and all valves
+      MyNum = String(k) ;
+      if ( k < 10 ) {
+        MyNum = "0" + MyNum ;
+      }
+      i = String(server.argName(j)).indexOf("h" + MyNum  );
+      if (i != -1) { //
+        shas.bBoostTimes[k] = true ;
+      }
+    }
+    
     i = String(server.argName(j)).indexOf("reboot");
     if (i != -1){  // 
       if (( lRebootCode == String(server.arg(j)).toInt() ) && (lRebootCode>0 )){  // stop the phone browser being a dick and retry resetting !!!!
@@ -194,6 +219,12 @@ void handleRoot() {
       shas.iMode = String(server.arg(j)).toInt() ;
       shas.iMode = constrain(shas.iMode,0,3);
     }
+    i = String(server.argName(j)).indexOf("jmod");
+    if (i != -1){  // 
+      shas.iBoostMode  = String(server.arg(j)).toInt() ;
+      shas.iBoostMode  = constrain(shas.iBoostMode,0,7);
+    }
+    
     i = String(server.argName(j)).indexOf("mylat");    //lat  
     if (i != -1){  // have a request to set the latitude
       ghks.latitude = String(server.arg(j)).toFloat() ;
@@ -246,7 +277,7 @@ void handleRoot() {
     i = String(server.argName(j)).indexOf("sdmn");
     if (i != -1){  
       shas.fSolarTempDiffMin = String(server.arg(j)).toFloat() ;
-    }        
+    }   
     i = String(server.argName(j)).indexOf("tbtp");
     if (i != -1){  
       shas.fTopBoostTemp = String(server.arg(j)).toFloat() ;
@@ -263,6 +294,25 @@ void handleRoot() {
     if (i != -1){  
       shas.fBottomBoostDiffTemp = String(server.arg(j)).toFloat() ;
     }        
+    
+    i = String(server.argName(j)).indexOf("owper");
+    if (i != -1){  
+      shas.iWeatherBoostMinCloud[0] = String(server.arg(j)).toInt() ;
+    }        
+    i = String(server.argName(j)).indexOf("owmwt");
+    if (i != -1){  
+      shas.fWeatherBoostMinWaterTemp[0] = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("owmat");
+    if (i != -1){  
+      shas.fWeatherBoostMinAirTemp[0] = String(server.arg(j)).toFloat() ;
+    }        
+    i = String(server.argName(j)).indexOf("owdlt");
+    if (i != -1){  
+      shas.fWeatherBoostTempDiffMin = String(server.arg(j)).toFloat() ;
+    }        
+    
+         
     
     i = String(server.argName(j)).indexOf("disop");
     if (i != -1){  // 
@@ -298,59 +348,17 @@ void handleRoot() {
      String(server.arg(j)).toCharArray( ghks.NodeName , sizeof(ghks.NodeName)) ;
     }
 
-    i = String(server.argName(j)).indexOf("smse");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.server , sizeof(SMTP.server)) ;
-    }
-    i = String(server.argName(j)).indexOf("smus");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.user , sizeof(SMTP.user)) ;
-    }
-    i = String(server.argName(j)).indexOf("smpa");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.password , sizeof(SMTP.password)) ;
-    }
-    i = String(server.argName(j)).indexOf("smfr");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.FROM , sizeof(SMTP.FROM)) ;
-    }
-    i = String(server.argName(j)).indexOf("smto");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.TO , sizeof(SMTP.TO)) ;
-    }
-    i = String(server.argName(j)).indexOf("smcc");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.CC , sizeof(SMTP.CC)) ;
-    }
-    i = String(server.argName(j)).indexOf("smbc");
-    if (i != -1){  // have a request to request a time update
-     String(server.arg(j)).toCharArray( SMTP.BCC , sizeof(SMTP.BCC)) ;
-    }
-    i = String(server.argName(j)).indexOf("smmb");
+    
+    i = String(server.argName(j)).indexOf("owapi");
     if (i != -1){  
-     String(server.arg(j)).toCharArray( SMTP.message , sizeof(SMTP.message)) ;
+     String(server.arg(j)).toCharArray( ghks.apikey , sizeof(ghks.apikey)) ;
     }
-    i = String(server.argName(j)).indexOf("smsj");
+    i = String(server.argName(j)).indexOf("owser");
     if (i != -1){  
-     String(server.arg(j)).toCharArray( SMTP.subject , sizeof(SMTP.subject)) ;
+     String(server.arg(j)).toCharArray( ghks.servername , sizeof(ghks.servername)) ;
     }
     
     
-    i = String(server.argName(j)).indexOf("smpo");
-    if (i != -1){  // 
-      SMTP.port = String(server.arg(j)).toInt() ;
-      SMTP.port = constrain(SMTP.port,1,65535);
-    }
-    i = String(server.argName(j)).indexOf("smbz");
-    if (i != -1){  //  
-        SMTP.bSecure = false ;        
-    }
-    i = String(server.argName(j)).indexOf("smbs");
-    if (i != -1){  //  
-      if ( String(server.arg(j)).length() == 2 ){ // only put back what we find
-        SMTP.bSecure = true ;        
-      }
-    }  
 
     
     i = String(server.argName(j)).indexOf("rpcip");
@@ -637,7 +645,7 @@ void handleRoot() {
     server.sendContent(message) ;
     message = "" ;
     
-    message += "<tr><form method=post action=" + server.uri() + "><td>Operating Mode (Pump Action)</td><td align=center><select name='imod'>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Pump Operating Mode</td><td align=center><select name='imod'>" ;
     for ( i = 0 ; i < MAX_MODES ; i++ ){
         if (shas.iMode == i ){
           MyCheck = F(" SELECTED ");
@@ -651,6 +659,25 @@ void handleRoot() {
         message += "<option value="+String(i)+ MyCheck +">" + pinname ;                
     }
     message += "</select></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+
+    message += "<tr><form method=post action=" + server.uri() + "><td>Boost Operating Mode</td><td align=center><select name='jmod'>" ;
+    for ( i = 0 ; i < MAX_BMODES ; i++ ){
+        if (shas.iMode == i ){
+          MyCheck = F(" SELECTED ");
+        }else{
+          MyCheck = "";            
+        }
+        switch(i){
+          case 0: pinname = F("Temperature Only") ; break;
+          case 1: pinname = F("Time of Day") ; break;
+          case 2: pinname = F("Time of Day + Air Temperature") ; break;
+          case 3: pinname = F("Cloud") ; break;
+          case 4: pinname = F("Cloud + Temperature") ; break;
+        }
+        message += "<option value="+String(i)+ MyCheck +">" + pinname ;                
+    }
+    message += "</select></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    
     message += "<tr><td colspan=4>.</td></tr>" ;
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPPing[0],ghks.IPPing[1],ghks.IPPing[2],ghks.IPPing[3]);
     message += "<tr><form method=post action=" + server.uri() + "><td>Ping Address</td><td align=center>" ; 
@@ -673,24 +700,16 @@ void handleRoot() {
     message += "<tr><td colspan=4>.</td></tr>" ;
     server.sendContent(message) ;
     message = "";
-    
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Port</td><td align=center title='Popular Values 25 , 465 , 2525 , 587'><input type='text' name='smpo' value='"+String(SMTP.port)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Server</td><td align=center><input type='text' name='smse' value='"+String(SMTP.server)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP User</td><td align=center><input type='text' name='smus' value='"+String(SMTP.user)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Password</td><td align=center><input type='text' name='smpa' value='"+String(SMTP.password)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP FROM</td><td align=center><input type='text' name='smfr' value='"+String(SMTP.FROM)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP TO</td><td align=center><input type='text' name='smto' value='"+String(SMTP.TO)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP CC</td><td align=center><input type='text' name='smcc' value='"+String(SMTP.CC)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP BCC</td><td align=center><input type='text' name='smbc' value='"+String(SMTP.BCC)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Subject</td><td align=center><input type='text' name='smsj' value='"+String(SMTP.subject)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Message</td><td align=center><input type='text' name='smmb' value='"+String(SMTP.message)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
 
-    if ( ( SMTP.bSecure ) != 0 ){
-      MyCheck = F("CHECKED")  ;    
-    }else{
-      MyCheck = F("")  ;    
-    }
-    message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Secure<input type='hidden' name='smbz' value='0'></td><td align=center><input type='checkbox' name='smbs' " + String(MyCheck)+ "></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Open Weather API KEY</td><td align=center><input type='text' name='owapi' value='"+String(ghks.apikey)+"' size=30 maxlength=40></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Open Weather Site or IP</td><td align=center><input type='text' name='owser' value='"+String(ghks.servername)+"' size=30 maxlength=32></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+
+    message += "<tr><form method=post action=" + server.uri() + "><td>Max Predicted Cloud Boost Percetage</td><td align=center><input type='text' name='owper' value='"+String(shas.iWeatherBoostMinCloud[0])+"' size=30 maxlength=32></td><td>(%)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Min Water Temp Cloud Boost</td><td align=center><input type='text' name='owmwt' value='"+String(shas.fWeatherBoostMinWaterTemp[0])+"' size=30 maxlength=32></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Min Predicted Air Boost Temp</td><td align=center><input type='text' name='owmat' value='"+String(shas.fWeatherBoostMinAirTemp[0])+"' size=30 maxlength=32></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><td>Predicted Boost Temps delta T</td><td align=center><input type='text' name='owdlt' value='"+String(shas.fWeatherBoostTempDiffMin)+"' size=30 maxlength=32></td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+   
+     
     message += F("</table>");
     server.sendContent(message) ;    
 
@@ -714,24 +733,25 @@ void handleRoot() {
     message += F("</table>");
     server.sendContent(message);
     
-    message = "<br>Relay Setup" ;
+    message = "<br>Virtual Output to Relay Setup" ;
     message += F("<table border=1 title='Relay Setup'>") ;
-    message += F("<tr><th>Relay</th><th>Function</th><th>CPU Pin</th><th>Active State</th><th>.</th></tr>") ;
+    message += F("<tr><th>Output Relay</th><th>Function</th><th>CPU Pin</th><th>Active State</th><th>.</th></tr>") ;
     for (i = 0; i < MAX_RELAY ; i++) {
-      if ( shams.bRelayState[i] ==  shas.ActiveValue[i] ){
+      if ( shams.bRelayState[i] ==  (bool)shas.ActiveValue[i] ){
         MyColor = "bgcolor='Yellow'" ;
       }else{
         MyColor = "" ;         //bgcolor='red'
       }
       MyCheck = RelayDescription(i) ;      
       message +="<tr><form method=get action=" + server.uri() + "><td align=center " + MyColor + ">" + String(i+1) + "</td><td>"+MyCheck+"</td><td align=center><select name='rbrp"+String(i)+"'>";
-      for (k = 0; k < 17; k++) {
+      for (k = -1; k < 17; k++) {
         if (shas.relayPort[i] == k ){
           MyCheck = F(" SELECTED ");
         }else{
           MyCheck = "";            
         }
         switch(k){
+          case -1: pinname = F("--- UNUSED ---") ; break;
           case 0: pinname = F("GPIO 0 - D3") ; break;
           case 1: pinname = F("GPIO 1 - D1 TXD0") ; break;
           case 2: pinname = F("GPIO 2 - D9 BUILTIN LED") ; break;
@@ -788,24 +808,81 @@ void handleRoot() {
       }
       message += "</select></td><td>"+MyCheck+"</td><td align=center>"+String(shams.fTemp[i],1)+"</td><td>(C)</td><td><input type='submit' value='SET'></td></form></tr>" ;
     }    
-    message += "<tr><td align=center>4</td><td>---AO ---</td><td align=center>X</td><td><b>T1</b> Roof Temp</td><td align=center>"+String(shams.fTemp[4])+"</td><td>(C)</td></tr>" ;
+    message += "<tr><td align=center>4</td><td>--- AO ---</td><td align=center>X</td><td><b>T1</b> Roof Temp</td><td align=center>"+String(shams.fTemp[4])+"</td><td>(C)</td></tr>" ;
 
-    message += F("</table>");
+    message += F("</table><br>");
     server.sendContent(message) ;    
+
+    message = F("<br>Booster Time Control<br><table border=1 title='Booster Time Control'>");
+    message += F("<tr><th></th><th colspan=12>Boost Hours</th><th>.</th></tr>");
+    server.sendContent(message) ; // End of Table Header
+
+    for ( j = 0 ; j < 2 ; j++ ) {
+      message = "<form method=post action='" + server.uri() + "'>" ;
+      message += "<tr><th><input type='hidden' name='hr' value='" + String(j) + "'>.</th>";
+      for ( i = 0 ; i < 12 ; i++ ) {
+        k = i + (j * 12 ) ;
+        if ( k < 10 ) {
+          message += "<th>0" + String(k) + "</th>" ;
+        } else {
+          message += "<th>" + String(k) + "</th>" ;
+        }
+      }
+      message += F("<th><input type='submit' value='SET'>.</th></tr>");
+      server.sendContent(message) ; // End of Table Header
+      message = F("<tr><td>00</td>") ;
+      for ( i = (j * 24) ; i < (24 + (j * 24)) ; i += 2 ) {
+        MyNum = String(i) ;
+        if ( i < 10 ) {
+          MyNum = "0" + MyNum ;
+        }
+        if ( shas.bBoostTimes[i] ) {
+          MyCheck = F("CHECKED") ;
+          MyColor =  F("bgcolor=green") ;  // check if no start times
+        } else {
+          MyCheck = F("") ;
+          MyColor = F("") ;
+        }
+        message += "<td " + String(MyColor) + "><input type='checkbox' name='h" + MyNum + "' " + String(MyCheck) + "></td>" ;
+      }
+      message += F("</td><td></tr>");
+      server.sendContent(message) ;
+
+      message = F("<tr><td>30</td>");
+      for ( i = 1 + (j * 24) ; i < ( 24 + (j * 24)) ; i += 2 ) {
+        MyNum = String(i) ;
+        if ( i < 10 ) {
+          MyNum = "0" + MyNum ;
+        }
+        if ( shas.bBoostTimes[i] ) {
+          MyCheck = F("CHECKED") ;
+          MyColor =  F("bgcolor=green") ;  // check if no start times
+        } else {
+          MyCheck = F("") ;
+          MyColor = F("") ;
+        }
+        message += "<td " + String(MyColor) + "><input type='checkbox' name='h" + MyNum + "' " + String(MyCheck) + "></td>" ;
+      }
+      message += F("</td><td></tr></form>");
+      server.sendContent(message) ; // End of Table Header
+    }
+    server.sendContent(F("</table><br>"));
+
 
   }
   
   
   if (bDefault) {     // #####################################   default control   ##############################################
     server.sendContent(F("<br><b>Solar Water Heater Main SCADA</b>"));
-
+/*
     sensors.requestTemperatures();  
     for ( i = 0 ; i < 4 ; i++ ){
       shams.fTemp[i] = sensors.getTempC(Thermometer[shas.sensor[i]]) ;
     }
-    server.sendContent(F("</table><br><table border=1 title='Temperatures'>"));
-    server.sendContent(F("<tr><th><b>Location</th><th align=center><b>Address</b></th><th align=center><b>Current Value</b></th><th>Units</th></tr>")) ;
-    server.sendContent("<tr><td><b>T1</b> Roof Temp</td><td align=center> - Analog A0 - </td><td align=center>" + String(shams.fTemp[4],1) + "</td><td align=center>(C)</td></tr>" ) ;
+*/    
+    message = F("</table><br><table border=1 title='Temperatures'>");
+    message += F("<tr><th><b>Location</th><th align=center><b>Address</b></th><th align=center><b>Current Value</b></th><th>Units</th></tr>") ;
+    message += "<tr><td><b>T1</b> Roof Temp</td><td align=center> - Analog A0 - </td><td align=center>" + String(shams.fTemp[4],1) + "</td><td align=center>(C)</td></tr>" ;
     
     for ( i = 0 ; i < 4 ; i++ ){
       MyColor = "" ; 
@@ -816,41 +893,39 @@ void handleRoot() {
         case 2: MyCheck =  "<b>T4</b> Air Temp"  ;    break; 
         case 3: MyCheck =  "<b>T5</b> Spare Temp"  ;    break; 
       }
-      server.sendContent("<tr><td>" + MyCheck + "</td><td align=center>" + String(buff) + "</td><td align=center>" + MyColor + String(shams.fTemp[i],1) + "</td><td align=center>(C)</td></tr>" ) ;
+      message += "<tr><td>" + MyCheck + "</td><td align=center>" + String(buff) + "</td><td align=center>" + MyColor + String(shams.fTemp[i],1) + "</td><td align=center>(C)</td></tr>"  ;
     }    
-    server.sendContent(F("<tr><td>Sunrise - State - Sunset</td><td colspan=2 align=center>"));
+            
+    message += F("<tr><td>Sunrise - State - Sunset</td><td colspan=2 align=center>");
     snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(SolarApp.sunrise), MinSolarTime(SolarApp.sunrise));
-    server.sendContent(String(buff)) ; 
+    message += String(buff) ; 
     if ( SolarApp.iDayNight == 1 ){
-      server.sendContent(F(" - DAY - "));
+      message += F(" - DAY - ");
     }else{
-      server.sendContent(F(" - NIGHT - "));          
+      message += F(" - NIGHT - ");          
     }
     snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(SolarApp.sunset), MinSolarTime(SolarApp.sunset));        
-    server.sendContent(String(buff)) ; 
-    server.sendContent(F("</td><td>(hh:mm)</td></tr>"));
-    server.sendContent(F("</table><br>Relays"));
+    message += String(buff) ; 
+    message += F("</td><td>(hh:mm)</td></tr>");
+    message += F("</table><br><b>Outputs</b>");
+    server.sendContent(message) ;
     
-    server.sendContent(F("<table><br><table border=1 title='Relays'>"));
-    server.sendContent("<tr><th>Relay No</th><th>Function</th><th>GPIO Pin</th><th>Manual</th><th>Timer(s)</th></tr>" ) ;
+    message = F("<table><br><table border=1 title='Relay Outputs'>");
+    message += "<tr><th>Relay No</th><th>Function</th><th>GPIO Pin</th><th>Manual</th><th>Timer(s)</th></tr>"  ;
     for ( i = 0 ; i < MAX_RELAY ; i++ ){
-      if ( shams.bRelayState[i] ==  shas.ActiveValue[i] ){
+      if ( shams.bRelayState[i] ==  (bool)shas.ActiveValue[i] ){
         MyColor = "bgcolor='Yellow'" ;
       }else{
-        MyColor = "" ;        // bgcolor='red'
+        MyColor = "" ;                     // bgcolor='red'
       }
-      switch (i){
-        case 0: MyCheck =  "Pump Relay (T1-T3)"  ;  break; 
-        case 1: MyCheck =  "Boost Element 1 (T2)"  ;    break; 
-        case 2: MyCheck =  "Boost Element 2 (T2)"  ;    break; 
-        case 3: MyCheck =  "Spare "  ;    break; 
-      }
-      server.sendContent("<tr><form method=get action=" + server.uri() + "><td align=center "+String(MyColor)+">"+String(i)+"</td><td "+String(MyColor)+">" + String(MyCheck) + "</td><td align=center>"+String(shas.relayPort[i])+"</td><td><input type='submit' value='Activate'><input type='hidden' name='actv"+String(i)+"' value='true'></td><td align=center>"+String(shams.TTG[i])+"</td></form></tr>" ) ;
+      MyCheck = RelayDescription(i) ;
+      message += "<tr><form method=get action=" + server.uri() + "><td align=center "+String(MyColor)+">"+String(i)+"</td><td "+String(MyColor)+">" + String(MyCheck) + "</td><td align=center>"+String(shas.relayPort[i])+"</td><td><input type='submit' value='Activate'><input type='hidden' name='actv"+String(i)+"' value='true'></td><td align=center>"+String(shams.TTG[i])+"</td></form></tr>" ;
     }
-    server.sendContent(F("</table>"));
+    message += F("</table>");
+    server.sendContent(message) ;
 
-    server.sendContent(F("<br><b>Alarms</b><table><br><table border=1 title='Alarms'>"));
-    server.sendContent("<tr><th>Alarm</th><th>Email</th><th>Test</th></tr>" ) ;
+    message = F("<br><b>Alarms</b><br><table border=1 title='Alarms'>");
+    message += "<tr><th>Alarm</th><th>Email</th><th>Test</th></tr>" ;
     for ( i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
       if ( shams.bAlarm[i]  ) {
         MyColor = "bgcolor='Yellow'" ;
@@ -866,14 +941,12 @@ void handleRoot() {
         MyCheck2 = "- NO -" ;        
         MyNum = "bgcolor='FireBrick'" ;
       }
-      server.sendContent("<tr><form method=get action=" + server.uri() + "><input type='hidden' name='atst"+String(i) +"' value='true'><td "+MyColor+">"+GetAlarmString(i)+"</td><td "+MyNum+">" + MyCheck2+ "</td><td><input type='submit' value='"+MyCheck+"'></td></form></tr>" ) ;
+      message += "<tr><form method=get action=" + server.uri() + "><input type='hidden' name='atst"+String(i) +"' value='true'><td "+MyColor+">"+GetAlarmString(i)+"</td><td "+MyNum+">" + MyCheck2+ "</td><td><input type='submit' value='"+MyCheck+"'></td></form></tr>" ;
     }
-    server.sendContent(F("</table>"));
-    
+    message += F("</table>");
+    server.sendContent(message) ; 
   }
-
   SendHTTPPageFooter();
-
 }
 
 String GetAlarmString(int iAlarmNo){
@@ -886,6 +959,8 @@ String GetAlarmString(int iAlarmNo){
         case 5: return("Boost Element 1 Energised ")  ;    break; 
         case 6: return("Boost Element 2 Energised ")  ;    break; 
         case 7: return("Controler Rebooted ")  ;    break; 
+        case 8: return("Sensor Failed ")  ;    break; 
+        case 9: return("Spare ")  ;    break; 
       }  
 }
 
@@ -899,6 +974,8 @@ String GetAlarmValue(int iAlarmNo){
         case 5: return(String(shas.fTopBoostTemp,1))  ;    break; 
         case 6: return(String(shas.fBottomBoostTemp,1))  ;    break; 
         case 7: return("--- NA ---")  ;    break; 
+        case 8: return("--- NA ---")  ;    break; 
+        case 9: return("--- NA ---")  ;    break; 
       }  
 }
 
@@ -907,9 +984,14 @@ String RelayDescription(int i){
     switch (i){
       case 0: return("Pump Relay (T1-T3)")  ;  break; 
       case 1: return("Boost Element 1 (T2)")  ;    break; 
-      case 2: return("Boost Element 2 (T2)")  ;    break; 
-      case 3: return("Spare ")  ;    break; 
+      case 2: return("Boost Element 2 (T3)")  ;    break; 
+      case 3: return("Pump (T1-T3) Only")  ;    break; 
+      case 4: return("Boost Weather Only")  ;    break; 
+      case 5: return("Multi Boost ")  ;    break; 
+      case 6: return("Spare ")  ;    break; 
+      case 7: return("Spare ")  ;    break; 
     }
   
 }
+
 

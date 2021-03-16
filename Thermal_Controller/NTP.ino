@@ -16,7 +16,10 @@ unsigned long processNTPpacket(void){
 unsigned long sendNTPpacket(char* address){
 byte packetBuffer[ NTP_PACKET_SIZE];     //buffer to hold incoming and outgoing packets  
 IPAddress ntpIP ;
-  if (WiFi.isConnected())  {
+IPAddress MyIP;
+
+  MyIP =  WiFi.localIP() ;                  
+  if (WiFi.isConnected() && (MyIP[0] != 0 )&& (MyIP[4] != 0 ))  {
     Serial.println("sending NTP packet...");
                       
     memset(packetBuffer, 0, NTP_PACKET_SIZE);    // set all bytes in the buffer to 0
@@ -50,4 +53,5 @@ IPAddress ntpIP ;
     Serial.println("No WiFi - no point trying to send NTP packet...");
   }  
 }
+
 

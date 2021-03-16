@@ -18,8 +18,21 @@
 #include <DallasTemperature.h>
 #include <ESP8266Ping.h>
 #include <ESPMail.h>
+#include <ArduinoJson.h>           //https://github.com/bblanchon/ArduinoJson
+#include <Adafruit_MAX31865.h>
 
-#define ONE_WIRE_BUS 26
+// Use software SPI: CS, DI, DO, CLK
+// Adafruit_MAX31865 thermo = Adafruit_MAX31865(10, 11, 12, 13);
+// use hardware SPI, just pass in the CS pin
+Adafruit_MAX31865 thermo = Adafruit_MAX31865(15,13,12,14);
+
+#define RREF      4300.0
+// The 'nominal' 0-degrees-C resistance of the sensor
+// 100.0 for PT100, 1000.0 for PT1000
+#define RNOMINAL  1000.0
+
+
+#define ONE_WIRE_BUS 2   // gpio 2  
 #define TEMPERATURE_PRECISION 12
 
 OneWire oneWire(ONE_WIRE_BUS);
@@ -31,10 +44,12 @@ ESPMail WDmail;
 #include <ModbusRtu.h>
 #define ID   1
 #define MAX_MODBUS_DATA  50
-#define MAX_EMAIL_ALARMS 8 
-#define MAX_RELAY 4
+#define MAX_EMAIL_ALARMS 10 
+#define MAX_RELAY 8
 #define MAX_TEMP_SENSOR 5
 #define MAX_MODES 2
+#define MAX_BMODES 5
+#define MAX_FORECAST_DAYS 4
 
 uint16_t au16data[MAX_MODBUS_DATA]; //!< data array for modbus network sharing
 uint8_t u8state; //!< machine state
@@ -68,7 +83,9 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   long PingFreq ;                         // 208
   float latitude;                         // 212
   float longitude;                        // 216 
-} general_housekeeping_stuff_t ;          // computer says it's 136 not 130 ??? is my maths crap ????
+  char apikey[40] ;                       // 172
+  char servername[32] ;
+} general_housekeeping_stuff_t ;          // 
 
 general_housekeeping_stuff_t ghks ;
 
@@ -81,13 +98,13 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   float   fBottomBoostTemp ; 
   float   fTopBoostDiffTemp ;
   float   fBottomBoostDiffTemp ; 
-  uint8_t sensor[MAX_TEMP_SENSOR] ;                   // which sensor is where
+  uint8_t sensor[MAX_TEMP_SENSOR] ;               // which sensor is where
   uint8_t relayPort[MAX_RELAY] ;
   uint8_t ActiveValue[MAX_RELAY] ;
-  uint8_t relayMinActivate[MAX_RELAY] ;         // Min activation time 
-  int     iMode ;                       // operation mode
-  int     iBoostMode ;                       // operation mode
-  float   fAnalogMult ;                 // calibration factors for adc channel  
+  uint8_t relayMinActivate[MAX_RELAY] ;           // Min activation time 
+  int     iMode ;                                 // pump operation mode
+  int     iBoostMode ;                            // operation mode
+  float   fAnalogMult ;                           // calibration factors for adc channel  
   float   fAnalogAdd ;
   float   fTankOverTempAlarm ;
   float   fTankUnder1TempAlarm ;
@@ -96,9 +113,15 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   float   fRoofUnderTempAlarm ;
   bool    bEmails[MAX_EMAIL_ALARMS] ; 
   bool    bAlarm[MAX_EMAIL_ALARMS] ; 
-  bool    bBoostTimes[48] ;           // half hour time slots for off peak power timer
-  byte    Boost_wdays   ;             // days of wek plus an enable SOP
-} Solar_Heater_App_stuff_t ;          // computer says it's 136 not 130 ??? is my maths crap ????
+  bool    bBoostTimes[48] ;                       // half hour time slots for off peak power timer
+  byte    Boost_wdays   ;                         // days of wek plus an enable SOP
+  int     iWeatherBoostMinCloud[3] ;
+  float   fWeatherBoostMinWaterTemp[3] ;
+  float   fWeatherBoostMinAirTemp[3] ;            // stops very hot cloud days getting boost.
+  float   fWeatherBoostTempDiffMin ; 
+  int     iSpare ;
+  float   fSpare ;
+} Solar_Heater_App_stuff_t ;          
 
 Solar_Heater_App_stuff_t shas ;
 
@@ -114,7 +137,7 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   bool bSecure ;
   char message[64] ;
   char subject[64] ;
-} Email_App_stuff_t ;          // computer says it's 136 not 130 ??? is my maths crap ????
+} Email_App_stuff_t ;          
 
 Email_App_stuff_t SMTP;
 
@@ -130,7 +153,7 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int   iDayNight ;          //
   float decl ;
   float eqtime ;
-} Solar_App_stuff_t ;          // computer says it's 136 not 130 ??? is my maths crap ????
+} Solar_App_stuff_t ;          
 
 Solar_App_stuff_t SolarApp  ;
 
@@ -139,12 +162,21 @@ Solar_App_stuff_t SolarApp  ;
 typedef struct __attribute__((__packed__)) {     // memory stuff
   uint16_t wSendEmail ;
   float fTemp[MAX_TEMP_SENSOR];
+  float fTempPrev[MAX_TEMP_SENSOR];
   bool  bRelayState[MAX_RELAY] ;
   int   TTG[MAX_RELAY] ;
   bool  bAlarm[MAX_EMAIL_ALARMS] ;
   bool  bPrevAlarm[MAX_EMAIL_ALARMS] ;
-  bool bDoReboot = false ;
-  long iPingTime = -1 ;
+  bool  bDoReboot = false ;
+  bool  bDoGetWeather = false ;
+  bool  bMadeWeatherDecision = false ;
+  bool  bWeatherBoost = false ;
+  long  iPingTime = -1 ;
+  time_t WForecastDate;
+  int   WClouds[MAX_FORECAST_DAYS];
+  float WMaxTemp[MAX_FORECAST_DAYS];
+  float WMinTemp[MAX_FORECAST_DAYS];
+  int   iLasthttpResponseCode;
 } Solar_Heater_App_memory_stuff_t ;         
 
 Solar_Heater_App_memory_stuff_t shams ;
@@ -156,7 +188,7 @@ char buff[BUFF_MAX];
 const byte LED = BUILTIN_LED ;  // = 16  4 ? D4
 const byte MAX_WIFI_TRIES = 60 ;
 const int MAX_EEPROM = 2000 ;
-const int PROG_BASE = 256 ;   // where the program specific information starts in eeprom (above GHKS)
+const int PROG_BASE = 400 ;   // where the program specific information starts in eeprom (above GHKS maybe but be careful about creep)
 
 
 IPAddress MyIP ;
@@ -164,7 +196,11 @@ IPAddress MyIPC  ;
 const int NTP_PACKET_SIZE = 48;       // NTP time stamp is in the first 48 bytes of the message
 byte packetBuffer[NTP_PACKET_SIZE];   // buffer to hold incoming and outgoing packets
 
+//#define HAVE_OLED 1
+#if defined(HAVE_OLED)
 SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2   - onboard display 0.96" 
+#endif
+
 //SH1106Wire display(0x3c, 4, 5);   // arse about ??? GPIO 5 = D1, GPIO 4 = D2  -- external ones 1.3"
 
 WiFiUDP ntpudp;
@@ -196,9 +232,9 @@ long lMinPingPeriod = 0 ;
 long lRebootCode = 0 ;
 struct ts tc;  
 bool bPrevConnectionStatus = false;
-unsigned long lTimeNext = 0 ;           // next network retry
-
-
+unsigned long lTimeNext = 600000 ;           // next network retry 10 min after starting
+bool bSendTestEmail = false ;
+long lRet_Email = 0 ;
 char Toleo[10] = {"Ver 1.1\0"}  ;
 char cssid[32] = {"Solar_Water_XXXXXXXX\0"} ;
 char *host = "Solar_Water_00000000\0";                // overwrite these later with correct chip ID
@@ -220,6 +256,7 @@ int i , k , j = 0;
   EEPROM.begin(MAX_EEPROM);
   LoadParamsFromEEPROM(true);  
 
+#if defined(HAVE_OLED)
   display.init();
   if (( ghks.lDisplayOptions & 0x01 ) != 0 ) {  // if bit one on then flip the display
     display.flipScreenVertically();
@@ -240,12 +277,13 @@ int i , k , j = 0;
   display.display();
 
   display.setFont(ArialMT_Plain_10);
+#endif
 
   if ( MYVER != ghks.lVersion ) {
 //  if ( false ) {
     BackInTheBoxMemory();         // load defaults if blank memory detected but dont save user can still restore from eeprom
     Serial.println("Loading memory defaults...");
-    delay(2000);
+    delay(1000);
   }
 
   WiFi.disconnect();
@@ -274,7 +312,7 @@ int i , k , j = 0;
   Serial.println(buff);
   
   bConfig = false ;   // are we in factory configuratin mode
-  display.display();
+//  display.display();
   if ( ghks.lNetworkOptions != 0 ) {
     WiFi.config(ghks.IPStatic,ghks.IPGateway,ghks.IPMask,ghks.IPDNS ); 
   }
@@ -286,6 +324,7 @@ int i , k , j = 0;
   while (( WiFi.status() != WL_CONNECTED ) && ( j < MAX_WIFI_TRIES )) {
     j = j + 1 ;
     delay(500);
+#if defined(HAVE_OLED)
     display.clear();
     display.setTextAlignment(TEXT_ALIGN_LEFT);
     display.drawString(0, 0, "Chip ID " + String(ESP.getChipId(), HEX) );
@@ -302,6 +341,7 @@ int i , k , j = 0;
     display.setTextAlignment(TEXT_ALIGN_CENTER);
     display.drawString(63 , 54 ,  String(buff) );
     display.display();     
+#endif
     digitalWrite(BUILTIN_LED,!digitalRead(BUILTIN_LED));
   } 
   if ( j >= MAX_WIFI_TRIES ) {
@@ -325,17 +365,19 @@ int i , k , j = 0;
 //     Serial.println(MyIP) ;
      snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", MyIP[0],MyIP[1],MyIP[2],MyIP[3]);            
      Serial.println(buff);
+#if defined(HAVE_OLED)
      display.drawString(0 , 53 ,  String(buff) );
-//     display.drawString(0, 53, "IP "+String(MyIP) );
      display.display();
+#endif
   }
   if (ghks.localPortCtrl == ghks.localPort ){             // bump the NTP port up if they ar the same
     ghks.localPort++ ;
   }
-//    Serial.println("Starting UDP");
     ntpudp.begin(ghks.localPort);                      // this is the recieve on NTP port
+#if defined(HAVE_OLED)
     display.drawString(0, 44, "NTP UDP " );
     display.display();
+#endif
     Serial.print("NTP Local UDP port: ");
     Serial.println(ntpudp.localPort());
                                                 // end of the normal setup
@@ -354,6 +396,8 @@ int i , k , j = 0;
   server.on("/", handleRoot);
   server.on("/setup", handleRoot);
   server.on("/settings", handleRoot);
+  server.on("/email", DisplayEmailSetup);
+  server.on("/weather",OpenWeatherPage);
   server.on("/scan", i2cScan);
   server.on("/stime", handleRoot);
   server.on("/info", handleInfo);
@@ -396,7 +440,7 @@ int i , k , j = 0;
   else 
     Serial.println("OFF");
 
-  for (i = 0 ; i < 3 ; i++){
+  for (i = 0 ; i < 4 ; i++){
     if (sensors.getAddress(Thermometer[i], i)) {
         printAddress(Thermometer[i]);
         sensors.setResolution(Thermometer[i], TEMPERATURE_PRECISION);
@@ -418,6 +462,18 @@ int i , k , j = 0;
       pinMode(shas.relayPort[i],OUTPUT);  // relay ouputs initalise
     }
   }
+
+  for ( i = 0 ; i < 4 ; i++ ){
+    shams.fTemp[i] = sensors.getTempC(Thermometer[shas.sensor[i]]) ;
+    shams.fTempPrev[i] = shams.fTemp[i] ;
+  }
+//  shams.fTemp[4] = ( analogRead(A0) * shas.fAnalogMult / 4096 ) + shas.fAnalogAdd ;
+//  shams.fTempPrev[4] = shams.fTemp[4] ;
+  
+  thermo.begin(MAX31865_2WIRE);  // set to 3WIRE or 4WIRE as necessary
+  uint16_t rtd = thermo.readRTD();
+  shams.fTemp[4] = thermo.temperature(RNOMINAL, RREF) ;
+  bDoTimeUpdate = true ;
   
 }
 
@@ -435,21 +491,25 @@ long lTD ;
   server.handleClient();
   OTAWebServer.handleClient();
   lScanCtr++ ;
+//  analogWrite(LED,(millis() % 2048 ));
   if (second() != rtc_sec) {                                // do onlyonce a second
-//    if ( bComsIn ){
-      digitalWrite(LED,!digitalRead(LED));
-//      bComsIn= false ;
-//    }
+//      digitalWrite(LED,!digitalRead(LED));
+
 
     rtc_sec = second();
     lScanLast = lScanCtr ;
     lScanCtr = 0 ;
 
-    for ( i = 0 ; i < 4 ; i++ ){
-      shams.fTemp[i] = sensors.getTempC(Thermometer[shas.sensor[i]]) ;
-    }
-    shams.fTemp[4] = ( analogRead(A0) * shas.fAnalogMult / 4096 ) + shas.fAnalogAdd ;
+//    if (( rtc_sec % 4 ) == 0 ) {
+      for ( i = 0 ; i < 4 ; i++ ){
+        shams.fTemp[i] = sensors.getTempC(Thermometer[shas.sensor[i]]) ;
+      }
+      sensors.requestTemperatures();
+//    }
 
+//    shams.fTemp[4] = ( analogRead(A0) * shas.fAnalogMult / 4096 ) + shas.fAnalogAdd ;
+
+#if defined(HAVE_OLED)
     display.clear();
     //      display.drawLine(minRow, 63, maxRow, 63);
     display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -503,6 +563,7 @@ long lTD ;
     snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));    
     display.drawString(63 , 43, String(buff));
     display.display();
+#endif
 
     for ( i = 0 ; i < MAX_RELAY ; i++ ){
     }
@@ -515,12 +576,12 @@ long lTD ;
           shams.bRelayState[0] = shas.ActiveValue[0] ;
         }
         if (( shams.fTemp[1] < shas.fCollectorMinTemp  ) || ( shams.fTemp[1] > shas.fCollectorMaxTemp  )){  // set to run for five minutes if over or under temp
-          shams.TTG[i] = 5 ;
+          shams.TTG[0] = 5 ;
         }
       break;
       case 1:                  // timer solar disc at 10 Deg (45 ish minutes after sunrise and before sunset)
           if (SolarApp.solar_el_deg >= 10 ) {          // day
-            if ( year() > 2019 ){                      // rtc look remotely valid
+            if ( year() > 2019 ){                      // rtc looks remotely valid
               shams.bRelayState[0] = shas.ActiveValue[0] ;
             }
           } else {                                    // night
@@ -544,6 +605,55 @@ long lTD ;
       shams.bRelayState[2] = !shas.ActiveValue[2] ;      
     }
     shams.bRelayState[3] = shams.bRelayState[0] ;  // may as well as mirror the first relay without the frost protection
+
+    switch(shas.iBoostMode){        // selected operational mode for boost element work out that has to be on
+      case 0:                  // Temperature Only
+      break;
+      case 1:                  // Time of Day
+        shams.bRelayState[5] = !shas.ActiveValue[5] ;                                                     // default is off
+        if ( year() > 2019 ) {   // scan the hour blocks
+          for ( i = 0 ; i < 48 ; i++) {  // scan all the on times and turn on if
+            if (shas.bBoostTimes[i] ) {
+              if (( i / 2) == hour()) {
+                if (( i % 2 ) == 0 ) {   // tophalf of hour
+                  if ( minute() < 30 ) {
+                    shams.bRelayState[5] = shas.ActiveValue[5] ;  
+                  }
+                } else {
+                  if ( minute() > 29 ) {
+                    shams.bRelayState[5] = !shas.ActiveValue[5] ;  
+                  }
+                }
+              }
+            }
+          }
+        }      
+      break;
+      case 2:                  // Time of Day + Temperature
+      break;
+      case 3:                  // Cloud
+      break;
+      case 4:                  // Cloud + Air Temperature
+        if ( shams.WClouds[1] > (float)shas.iWeatherBoostMinCloud[0] ){
+          if ((shams.WMaxTemp[1] < (float)shas.fWeatherBoostMinAirTemp[0])&& (shams.fTemp[0] < (float)shas.fWeatherBoostMinWaterTemp[0]) ) {  // air and tank top temp
+            shams.bRelayState[5] = shas.ActiveValue[5] ;
+          }
+          if(shams.fTemp[0] > ((float)shas.fWeatherBoostMinWaterTemp[0]+ shas.fWeatherBoostTempDiffMin )){  // if you get hot enough turn off
+            shams.bRelayState[5] = !shas.ActiveValue[5] ;        
+          }
+        }
+      break;
+      case 5:                  // 
+      break;
+    }
+    if ( shams.WClouds[1] > (float)shas.iWeatherBoostMinCloud[0] ){
+      if (shams.fTemp[0] < (float)shas.fWeatherBoostMinWaterTemp[0] ) {  // air and tank top temp
+        shams.bRelayState[4] = shas.ActiveValue[4] ;
+      }
+      if ( shams.fTemp[0] > ((float)shas.fWeatherBoostMinWaterTemp[0] + shas.fWeatherBoostTempDiffMin )){  // if you get hot enough turn off
+        shams.bRelayState[4] = !shas.ActiveValue[4] ;        
+      }
+    }
     
     for ( i = 0 ; i < MAX_RELAY ; i++ ){
       if (shams.TTG[i] > 0 ) {   // if yo have done an activate then switch it on for test
@@ -554,10 +664,10 @@ long lTD ;
       }
     }
 
-    if (( shams.fTemp[0] < shas.fTankUnder1TempAlarm ) && !( shams.fTemp[0] < shas.fTankUnder2TempAlarm )) {
+    if (( shams.fTemp[0] < shas.fTankUnder1TempAlarm ) && ( shams.fTempPrev[0] > shas.fTankUnder1TempAlarm ) && !( shams.fTemp[0] < shas.fTankUnder2TempAlarm )) {
       shams.bAlarm[0] = true ;                     // tank luke warm
     }
-    if ( shams.fTemp[0] < shas.fTankUnder1TempAlarm ){
+    if (( shams.fTemp[0] < shas.fTankUnder2TempAlarm )&&( shams.fTempPrev[0] > shas.fTankUnder2TempAlarm )){
       shams.bAlarm[1] = true ;                     // tank cold temp
     }
     if ( shams.fTemp[0] > shas.fTankOverTempAlarm ){
@@ -566,7 +676,7 @@ long lTD ;
     if ( shams.fTemp[4] > shas.fCollectorMaxTemp ){ // collector over temp
       shams.bAlarm[3] = true ;
     }
-    if ( shams.fTemp[4] < shas.fCollectorMinTemp ){ // collector under temp
+    if (( shams.fTemp[4] < shas.fCollectorMinTemp )&& ( shams.fTempPrev[1] > shas.fCollectorMinTemp )){ // collector under temp and hot water available
       shams.bAlarm[4] = true ;      
     }
     if ( shams.bRelayState[1] == shas.ActiveValue[1] ){                            // boost energised 1
@@ -575,8 +685,50 @@ long lTD ;
     if ( shams.bRelayState[1] == shas.ActiveValue[2] ){                            // boost energised 2
       shams.bAlarm[6] = true ;      
     }
+
+
+    for ( i = 0 ; i < MAX_TEMP_SENSOR ; i++ ){
+      if (( shams.fTemp[i] < -50.0 )&&( shams.fTempPrev[i] > -50.0 )){
+        shams.bAlarm[8] = true ;                                                  // tank cold temp
+      }
+      shams.fTempPrev[i] = shams.fTemp[i] ;
+    }
+
+    uint16_t rtd = thermo.readRTD();
+/*    Serial.print("RTD value: "); Serial.println(rtd);
+    float ratio = 1.0 * (float)rtd / 32768.0 ;
+    Serial.print("Ratio = "); Serial.println(ratio,8);
+    Serial.print("Resistance = "); Serial.println(RREF*ratio,8);
+    Serial.print("Temperature = "); Serial.println(thermo.temperature(RNOMINAL, RREF));
+*/    
+    shams.fTemp[4] = thermo.temperature(RNOMINAL, RREF) ;
+
+    // Check and print any faults
+    uint8_t fault = thermo.readFault();
+    if (fault) {
+      Serial.print("Fault 0x"); Serial.println(fault, HEX);
+      if (fault & MAX31865_FAULT_HIGHTHRESH) {
+        Serial.println("RTD High Threshold"); 
+      }
+      if (fault & MAX31865_FAULT_LOWTHRESH) {
+        Serial.println("RTD Low Threshold"); 
+      }
+      if (fault & MAX31865_FAULT_REFINLOW) {
+        Serial.println("REFIN- > 0.85 x Bias"); 
+      }
+      if (fault & MAX31865_FAULT_REFINHIGH) {
+        Serial.println("REFIN- < 0.85 x Bias - FORCE- open"); 
+      }
+      if (fault & MAX31865_FAULT_RTDINLOW) {
+        Serial.println("RTDIN- < 0.85 x Bias - FORCE- open"); 
+      }
+      if (fault & MAX31865_FAULT_OVUV) {
+        Serial.println("Under/Over voltage"); 
+      }
+      thermo.clearFault();
+    }
     
-  }
+  }// once a second
   
   if ( rtc_min != minute()) {
     GetTempLogs(); // grab the data if there is any
@@ -623,7 +775,14 @@ long lTD ;
       }
       lMinPingPeriod = 0 ; // reset the counter
     }
-  }
+    
+    if (( hour() == 23 ) && ( minute() > 15 ) && !shams.bMadeWeatherDecision ){ // once it gets to 11 pm make the all important weather decision
+      if (( shams.WClouds[1] >= shas.iWeatherBoostMinCloud[0] ) && ( shams.WMaxTemp[1] < shas.fWeatherBoostMinAirTemp[0] )) {  // tomorrow is more cloudy than..... 
+        shams.bWeatherBoost = true ;
+      }
+      shams.bMadeWeatherDecision = true ;
+    }
+  }    // minute
   
   if ( rtc_hour != hour()) {   // once a day do a time update or once an hour if not set yet
     if ((hour() == 6) || ( year() < 2020 )) {
@@ -637,9 +796,21 @@ long lTD ;
         shams.bPrevAlarm[i] = false ;
       }
     }
+    if ( hour() > 20 ) { // try getting weather at 9 , 10 ,11 pm start asking for forcasts
+      GetWeatherDataESP8266();
+    }
+    if ( SolarApp.iDayNight == 1 ){
+      shams.bWeatherBoost = false ;          // reset the grid boost
+      shams.bMadeWeatherDecision = false ;
+    }
     rtc_hour = hour() ;
   }
   
+  if ( shams.bDoGetWeather){
+//    getWeatherData() ;
+    GetWeatherDataESP8266();
+    shams.bDoGetWeather = false ;
+  }
   
   lRet = ntpudp.parsePacket() ; // this is actually server not a client ie we are doing time
   if ( lRet != 0 ) {
@@ -654,18 +825,25 @@ long lTD ;
     shams.bPrevAlarm[i] = shams.bAlarm[i] ; 
   }
 
-  if (( shams.wSendEmail != 0 )&& WiFi.isConnected())  {
-    for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
-      if ((( 0x01 << i ) & shams.wSendEmail ) != 0 ){
-        SendEmailToClient(i);
-        shams.wSendEmail = shams.wSendEmail &  (( 0x01 << i ) ^ 0xffff ) ;
+  if (WiFi.isConnected()){
+    if (( shams.wSendEmail != 0 ))  {
+      for (i = 0 ; i < MAX_EMAIL_ALARMS ; i++ ){
+        if ((( 0x01 << i ) & shams.wSendEmail ) != 0 ){
+          SendEmailToClient(i);
+          shams.wSendEmail = shams.wSendEmail &  (( 0x01 << i ) ^ 0xffff ) ;
+        }
+      }
+    }else{
+      if (bSendTestEmail) {
+        SendEmailToClient(-1);
+        bSendTestEmail = false ;
       }
     }
   }
 
   if (!WiFi.isConnected())  {
     lTD = (long)lTimeNext-(long) millis() ;
-    if (( abs(lTD)>40000)||(bPrevConnectionStatus)){ // trying to get roll over protection and a 30 second retry
+    if (( abs(lTD)>7000000)||(bPrevConnectionStatus)){ // trying to get roll over protection and a 30 second retry
       lTimeNext = millis() - 1 ;
 /*      Serial.print(millis());
       Serial.print(" ");
@@ -687,11 +865,11 @@ long lTD ;
       } else {
         WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
       }
-      lTimeNext = millis() + 30000 ;
+      lTimeNext = millis() + 60000 ;
     }
   }else{
     if ( !bPrevConnectionStatus  ){
-      MyIP = WiFi.localIP() ;
+//      MyIP = WiFi.localIP() ;
       bPrevConnectionStatus = true ;
     }
   }
