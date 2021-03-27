@@ -4,7 +4,8 @@ void BackInTheBoxMemory(){
   sprintf(ghks.nssid,"************\0");  // put your default credentials in here if you wish
   sprintf(ghks.npassword,"********\0");  // put your default credentials in here if you wish
   sprintf(ghks.NodeName,"Solar Water Heater SCADA\0") ;
-  
+  sprintf(ghks.servername,"api.openweathermap.org\0\0\0" ) ;     // remote server we will connect to
+  sprintf(ghks.apikey , "\0" ) ; // 
 
 
 
@@ -59,15 +60,20 @@ void BackInTheBoxMemory(){
   shas.fBottomBoostTemp = 25 ; 
   shas.fTopBoostDiffTemp = 2.0 ;
   shas.fBottomBoostDiffTemp = 2.0 ;
+  shas.fWeatherBoostTempDiffMin = 2.0 ;
   
   shas.fTankOverTempAlarm = 99 ;
   shas.fTankUnder1TempAlarm = 42.0 ;
   shas.fTankUnder2TempAlarm = 33.0 ;
   shas.fRoofOverTempAlarm = 105.0 ;
   shas.fRoofUnderTempAlarm = -1.0 ;
-  
+
+  shas.Boost_wdays = 0;
   for ( i = 0 ; i < 3 ; i++ ) {
     shas.sensor[i] = i ;
+    shas.iWeatherBoostMinCloud[i]= 75 ;
+    shas.fWeatherBoostMinWaterTemp[i] = 40 ;
+    shas.fWeatherBoostMinAirTemp[i] = 35 ;
   }
   for ( i = 0 ; i < 48 ; i++ ) {
     shas.bBoostTimes[i] = false ;
@@ -75,10 +81,14 @@ void BackInTheBoxMemory(){
   
   shas.sensor[3] = 4 ;
 
-  shas.relayPort[0] = 12 ;
-  shas.relayPort[1] = 13 ;
-  shas.relayPort[2] = 14 ;
-  shas.relayPort[3] = 15 ;
+  shas.relayPort[0] =  4 ; // 12
+  shas.relayPort[1] =  5 ; // 13
+  shas.relayPort[2] = -1 ; // 14
+  shas.relayPort[3] = -1 ; // 15
+  shas.relayPort[4] = -1 ;
+  shas.relayPort[5] = -1 ;
+  shas.relayPort[6] = -1 ;
+  shas.relayPort[7] = -1 ;
 
   shas.fAnalogMult = 1.0 ;
   shas.fAnalogAdd = 0.0 ;
@@ -90,16 +100,18 @@ void BackInTheBoxMemory(){
   ghks.longitude = 142.013618 ;
   
   SMTP.port = 25 ;                // 25 , 465 , 2525 , 587
-  sprintf(SMTP.server,"203.36.137.241\0") ;   // smtp.telstrabusiness.com 
+  sprintf(SMTP.server,"\0") ;   
   sprintf(SMTP.user,"\0") ;
   sprintf(SMTP.password,"\0") ;
-  sprintf(SMTP.FROM,"dougal@plummer.com.au\0") ;
-  sprintf(SMTP.TO,"dougal@plummersoftware.onmicrosoft.com\0") ;
+  sprintf(SMTP.FROM,"\0") ;
+  sprintf(SMTP.TO,"\0") ;
   sprintf(SMTP.CC,"\0") ;
   sprintf(SMTP.BCC,"\0") ;
   sprintf(SMTP.message,"Test\0") ;
   sprintf(SMTP.subject,"Node %08X\0",ESP.getChipId()) ;
   SMTP.bSecure = false ;
+
+ 
 
 }
 
@@ -154,4 +166,5 @@ int eeAddress ;
     bSaveReq = 0 ;
   }
 }
+
 
