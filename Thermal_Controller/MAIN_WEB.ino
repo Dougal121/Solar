@@ -159,6 +159,26 @@ void handleRoot() {
         shas.bBoostTimes[k] = true ;
       }
     }
+
+    i = String(server.argName(j)).indexOf("bmaoo"  );
+    if (i != -1) { //
+      shas.iBoostMode  = 0 ;
+    }
+    for ( k = 0 ; k < 4 ; k++) { 
+      MyNum = String(k) ;
+      i = String(server.argName(j)).indexOf("jmod"+MyNum);
+      if (i != -1){  // 
+        shas.iBoostMode  |= (1<<k) ;
+      }
+      i = String(server.argName(j)).indexOf("bmao"+MyNum);
+      if (i != -1){  // 
+        if ( String(server.arg(j)).toInt() != 0 ) { // OR is one  ... AND is zero
+          shas.iBoostMode  |=  (1<<(k+4)) ;
+        }
+      }
+    }
+    
+
     
     i = String(server.argName(j)).indexOf("reboot");
     if (i != -1){  // 
@@ -218,11 +238,6 @@ void handleRoot() {
     if (i != -1){  // 
       shas.iMode = String(server.arg(j)).toInt() ;
       shas.iMode = constrain(shas.iMode,0,3);
-    }
-    i = String(server.argName(j)).indexOf("jmod");
-    if (i != -1){  // 
-      shas.iBoostMode  = String(server.arg(j)).toInt() ;
-      shas.iBoostMode  = constrain(shas.iBoostMode,0,7);
     }
     
     i = String(server.argName(j)).indexOf("mylat");    //lat  
@@ -659,26 +674,46 @@ void handleRoot() {
         message += "<option value="+String(i)+ MyCheck +">" + pinname ;                
     }
     message += "</select></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
+    server.sendContent(message) ;
+    message = "" ;
 
-    message += "<tr><form method=post action=" + server.uri() + "><td>Boost Operating Mode</td><td align=center><select name='jmod'>" ;
-    for ( i = 0 ; i < MAX_BMODES ; i++ ){
-        if (shas.iMode == i ){
-          MyCheck = F(" SELECTED ");
+    message += "<tr><td colspan=4>.</td></tr>" ;
+    message += "<tr><form method=post action=" + server.uri() + "><th colspan=1><b>Multi Boost Operating Modes</b></th><th>Enable</th><th>Combine</th><th><input type='submit' value='SET'></th></tr>" ;
+    message += "<input type='hidden' name='bmaoo' value='0'>" ;
+    for ( i = 0 ; i < 4 ; i++ ){
+        MyNum = String(i) ;
+        if ((shas.iBoostMode & (1<<i)) != 0 ){
+          MyCheck = F(" CHECKED ");
         }else{
           MyCheck = "";            
         }
         switch(i){
-          case 0: pinname = F("Temperature Only") ; break;
+          case 0: pinname = F("Water Temperature") ; break;
           case 1: pinname = F("Time of Day") ; break;
-          case 2: pinname = F("Time of Day + Air Temperature") ; break;
-          case 3: pinname = F("Cloud") ; break;
-          case 4: pinname = F("Cloud + Temperature") ; break;
+          case 2: pinname = F("Prediced Air Temperature") ; break;
+          case 3: pinname = F("Predicted Cloud") ; break;
         }
-        message += "<option value="+String(i)+ MyCheck +">" + pinname ;                
+        message += "<tr><td>" + pinname + "</td><td><input type='checkbox' name='jmod" + MyNum + "' " + String(MyCheck) + "></td>" ;
+        if (i < 3 ){
+          message += "<td><select name='bmao" + MyNum + "'>" ;
+          if ((shas.iBoostMode & (1<<i+4)) == 0  ) {
+            message += "<option value=0 SELECTED>AND" ;
+            message += "<option value=1 >OR" ;         
+          }else{
+            message += "<option value=0 >AND" ;
+            message += "<option value=1 SELECTED>OR" ;                   
+          }
+          message += "</select></td>" ;
+        }else{
+          message += "<td></td>" ;
+        }
+        message += "<td>.</td></tr>" ;                
     }
-    message += "</select></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
     
-    message += "<tr><td colspan=4>.</td></tr>" ;
+    message += "</form><tr><td colspan=4>.</td></tr>" ;
+    server.sendContent(message) ;
+    message = "" ;
+
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPPing[0],ghks.IPPing[1],ghks.IPPing[2],ghks.IPPing[3]);
     message += "<tr><form method=post action=" + server.uri() + "><td>Ping Address</td><td align=center>" ; 
     message += "<input type='text' name='ipping' value='" + String(buff) + "' maxlength=16 size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>";
@@ -986,10 +1021,10 @@ String RelayDescription(int i){
       case 1: return("Boost Element 1 (T2)")  ;    break; 
       case 2: return("Boost Element 2 (T3)")  ;    break; 
       case 3: return("Pump (T1-T3) Only")  ;    break; 
-      case 4: return("Boost Weather Only")  ;    break; 
-      case 5: return("Multi Boost ")  ;    break; 
-      case 6: return("Spare ")  ;    break; 
-      case 7: return("Spare ")  ;    break; 
+      case 4: return("Boost Predicted Cloud Only")  ;    break; 
+      case 5: return("Boost Predicted Air Temp Only")  ;  break; 
+      case 6: return("Boost Time of Day Only ")  ;    break; 
+      case 7: return("Multi Condition Boost ")  ;    break; 
     }
   
 }

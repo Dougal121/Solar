@@ -21,6 +21,8 @@
 #include <ArduinoJson.h>           //https://github.com/bblanchon/ArduinoJson
 #include <Adafruit_MAX31865.h>
 
+//  At 12VDC The board uses 30ma CPU and 90ma both relays on
+
 // Use software SPI: CS, DI, DO, CLK
 // Adafruit_MAX31865 thermo = Adafruit_MAX31865(10, 11, 12, 13);
 // use hardware SPI, just pass in the CS pin
@@ -286,6 +288,14 @@ int i , k , j = 0;
     delay(1000);
   }
 
+  for ( i = 0 ; i < MAX_RELAY ; i++ ){
+    shams.bRelayState[i] = !shas.ActiveValue[i] ;
+    if (( shas.relayPort[i] < 17 ) && ( shas.relayPort[i] >= 0 )){  // check if its rubbish bfore doing it
+      pinMode(shas.relayPort[i],OUTPUT);  // relay ouputs initalise
+      digitalWrite( shas.relayPort[i] , shams.bRelayState[i] );
+    }
+  }
+
   WiFi.disconnect();
   Serial.println("Configuring soft access point...");
   WiFi.mode(WIFI_AP_STA);  // we are having our cake and eating it eee har
@@ -457,11 +467,6 @@ int i , k , j = 0;
   Serial.print(sensors.getDeviceCount(), DEC);
   Serial.println(" Temperature devices found.");
 
-  for ( i = 0 ; i < MAX_RELAY ; i++ ){
-    if (( shas.relayPort[i] < 17 ) && ( shas.relayPort[i] >= 0 )){  // check if its rubbish bfore doing it
-      pinMode(shas.relayPort[i],OUTPUT);  // relay ouputs initalise
-    }
-  }
 
   for ( i = 0 ; i < 4 ; i++ ){
     shams.fTemp[i] = sensors.getTempC(Thermometer[shas.sensor[i]]) ;
@@ -487,6 +492,9 @@ bool bDirty = false ;
 bool bDirty2 = false ;
 String csTmp ;
 long lTD ; 
+bool shamsRelay7 ;
+bool bFirst ;
+bool bOp ; 
   
   server.handleClient();
   OTAWebServer.handleClient();
@@ -606,55 +614,129 @@ long lTD ;
     }
     shams.bRelayState[3] = shams.bRelayState[0] ;  // may as well as mirror the first relay without the frost protection
 
-    switch(shas.iBoostMode){        // selected operational mode for boost element work out that has to be on
-      case 0:                  // Temperature Only
-      break;
-      case 1:                  // Time of Day
-        shams.bRelayState[5] = !shas.ActiveValue[5] ;                                                     // default is off
-        if ( year() > 2019 ) {   // scan the hour blocks
-          for ( i = 0 ; i < 48 ; i++) {  // scan all the on times and turn on if
-            if (shas.bBoostTimes[i] ) {
-              if (( i / 2) == hour()) {
-                if (( i % 2 ) == 0 ) {   // tophalf of hour
-                  if ( minute() < 30 ) {
-                    shams.bRelayState[5] = shas.ActiveValue[5] ;  
-                  }
-                } else {
-                  if ( minute() > 29 ) {
-                    shams.bRelayState[5] = !shas.ActiveValue[5] ;  
-                  }
-                }
+    shams.bRelayState[6] = !shas.ActiveValue[6] ;                            // time of day default is off
+    if ( year() > 2019 ) {                                                   // check th clock is set as all this stuff is date sensitive
+      j = 1 + ( elapsedDays(now()) - elapsedDays(shams.WForecastDate)) ;                           // default is to look at tomorrows weather
+      if ( hour(now()) < 10 ) {   // need todays forcast for tomorrow if Greater than midnight
+        j-- ;
+      }
+      if ( j < MAX_FORECAST_DAYS ){
+        if ( shams.WClouds[j] > (float)shas.iWeatherBoostMinCloud[0] ){
+          shams.bRelayState[4] = shas.ActiveValue[4] ;
+        }else{
+          shams.bRelayState[4] = !shas.ActiveValue[4] ;      
+        }
+        if ( shams.WMaxTemp[j] < (float)shas.fWeatherBoostMinAirTemp[0] ) {  // air and tank top temp
+          shams.bRelayState[5] = shas.ActiveValue[5] ;
+        }else{
+          shams.bRelayState[5] = !shas.ActiveValue[5] ;
+        }    
+      }else{
+        shams.bRelayState[4] = !shas.ActiveValue[4] ;      
+        shams.bRelayState[5] = !shas.ActiveValue[5] ;        
+      }
+    
+      for ( i = 0 ; i < 48 ; i++) {   // scan all the on times and turn on if
+        if (shas.bBoostTimes[i] ) {
+          if (( i / 2) == hour()) {
+            if (( i % 2 ) == 0 ) {    // tophalf of hour
+              if ( minute() < 30 ) {
+                shams.bRelayState[6] = shas.ActiveValue[6] ;  
+              }
+            } else {
+              if ( minute() > 29 ) {
+                shams.bRelayState[6] = shas.ActiveValue[6] ;  
               }
             }
           }
-        }      
-      break;
-      case 2:                  // Time of Day + Temperature
-      break;
-      case 3:                  // Cloud
-      break;
-      case 4:                  // Cloud + Air Temperature
-        if ( shams.WClouds[1] > (float)shas.iWeatherBoostMinCloud[0] ){
-          if ((shams.WMaxTemp[1] < (float)shas.fWeatherBoostMinAirTemp[0])&& (shams.fTemp[0] < (float)shas.fWeatherBoostMinWaterTemp[0]) ) {  // air and tank top temp
-            shams.bRelayState[5] = shas.ActiveValue[5] ;
-          }
-          if(shams.fTemp[0] > ((float)shas.fWeatherBoostMinWaterTemp[0]+ shas.fWeatherBoostTempDiffMin )){  // if you get hot enough turn off
-            shams.bRelayState[5] = !shas.ActiveValue[5] ;        
-          }
         }
-      break;
-      case 5:                  // 
-      break;
-    }
-    if ( shams.WClouds[1] > (float)shas.iWeatherBoostMinCloud[0] ){
-      if (shams.fTemp[0] < (float)shas.fWeatherBoostMinWaterTemp[0] ) {  // air and tank top temp
-        shams.bRelayState[4] = shas.ActiveValue[4] ;
       }
-      if ( shams.fTemp[0] > ((float)shas.fWeatherBoostMinWaterTemp[0] + shas.fWeatherBoostTempDiffMin )){  // if you get hot enough turn off
-        shams.bRelayState[4] = !shas.ActiveValue[4] ;        
+    }      
+
+    shamsRelay7 = false ;  // working in normal logic
+    bFirst  = false ;
+    for ( i = 0 ; i < 4 ; i++) {   // scan all the on times and turn on if
+      if ((shas.iBoostMode & (0x01<<i)) != 0 ){  // if enabled
+        bOp = shas.iBoostMode & (0x01<<(i+4))    ;
+        switch (i){
+          case 0:
+            if (shams.bRelayState[1] == shas.ActiveValue[1] ){
+              shamsRelay7 = true ;          
+            }else  {
+              shamsRelay7 = false ;                        
+            }
+            bFirst  = true ;
+          break;  
+          case 1:
+            if (!bFirst) {
+              if (shams.bRelayState[4] == shas.ActiveValue[4] ){
+                shamsRelay7 = true ;          
+              }else  {
+                shamsRelay7 = false ;                        
+              }
+              bFirst  = true ;
+            }else{
+              if (bOp){  // AND
+                if ((shams.bRelayState[4] != shas.ActiveValue[4] ) && shamsRelay7 ){
+                  shamsRelay7 = false ;                        
+                }
+              }else{  // OR
+                if ((shams.bRelayState[4] == shas.ActiveValue[4] ) || shamsRelay7 ){
+                  shamsRelay7 = true ;                        
+                }
+              }
+            }
+          break;
+          case 2:
+            if (!bFirst) {
+              if (shams.bRelayState[5] == shas.ActiveValue[5] ){
+                shamsRelay7 = true ;          
+              }else  {
+                shamsRelay7 = false ;                        
+              }
+              bFirst  = true ;
+            }else{
+              if (bOp){  // AND
+                if ((shams.bRelayState[5] != shas.ActiveValue[5] ) && shamsRelay7 ){
+                  shamsRelay7 = false ;                        
+                }
+              }else{  // OR
+                if ((shams.bRelayState[5] == shas.ActiveValue[5] ) || shamsRelay7 ){
+                  shamsRelay7 = true ;                        
+                }
+              }
+            }
+          break;
+          case 3:
+            if (!bFirst) {
+              if (shams.bRelayState[6] == shas.ActiveValue[6] ){
+                shamsRelay7 = true ;          
+              }else  {
+                shamsRelay7 = false ;                        
+              }
+              bFirst  = true ;
+            }else{
+              if (bOp){  // AND
+                if ((shams.bRelayState[6] != shas.ActiveValue[6] ) && shamsRelay7 ){
+                  shamsRelay7 = false ;                        
+                }
+              }else{  // OR
+                if ((shams.bRelayState[6] == shas.ActiveValue[6] ) || shamsRelay7 ){
+                  shamsRelay7 = true ;                        
+                }
+              }
+            }
+          break;
+        }
       }
     }
     
+    if ( shamsRelay7 ) {  // ok turn normal logic back into active/inactive states
+      shams.bRelayState[7] = shas.ActiveValue[7] ;
+    }else{
+      shams.bRelayState[7] = !shas.ActiveValue[7] ;
+    }
+        
     for ( i = 0 ; i < MAX_RELAY ; i++ ){
       if (shams.TTG[i] > 0 ) {   // if yo have done an activate then switch it on for test
         shams.bRelayState[i] = shas.ActiveValue[i] ;
