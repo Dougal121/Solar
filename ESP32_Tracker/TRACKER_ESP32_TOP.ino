@@ -4,6 +4,8 @@
  *  With help and contributions from many people - my thanks to them all.
  *  
  *  Feel free to use this code to help save our planet any way you can - GO SOLAR !
+ *  Newer copies can be found at https://github.com/Dougal121/Solar/tree/master/ESP32_Tracker
+ *      
  *  Compiles for LOLIN D32 @ 80Mhz
  */
 #include <esp_task_wdt.h>
