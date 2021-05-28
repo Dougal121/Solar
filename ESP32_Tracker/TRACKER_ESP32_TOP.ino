@@ -1,4 +1,4 @@
-/*  ESP8266 Dual Axis Solar Tracker - Circa 2020
+/*  ESP32 Dual Axis Solar Tracker - Circa 2021
  *   
  *  Written/Assembled By Dougal Plummer B.E.
  *  With help and contributions from many people - my thanks to them all.
