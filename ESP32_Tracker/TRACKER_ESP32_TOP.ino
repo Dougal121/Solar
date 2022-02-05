@@ -791,9 +791,9 @@ long lTD ;
       tv.sunset = Sunset(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone);
       tst = TrueSolarTime(tv.longitude, &tv.tc, ghks.fTimeZone);
       if ( tv.latitude <= 0 ) {
-        tv.sunX = abs(tv.latitude) - decl ;
-      }else{
         tv.sunX = abs(tv.latitude) + decl ;
+      }else{
+        tv.sunX = abs(tv.latitude) - decl ;
       }
       if (tv.solar_el_deg >= 0 ){            // day
         tv.iDayNight = 1 ;
