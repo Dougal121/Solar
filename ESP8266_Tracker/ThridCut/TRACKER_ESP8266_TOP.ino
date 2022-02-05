@@ -112,6 +112,12 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   char cpassword[24] ;                    // 
   long lDisplayOptions  ;                 //  
   char timeServer[40] ;                   //    = {"au.pool.ntp.org\0"}
+  uint8_t lNetworkOptions  ;              //
+  IPAddress IPStatic ;                    //  
+  IPAddress IPGateway ;                   //     
+  IPAddress IPMask ;                      //  
+  IPAddress IPDNS ;                       //  
+
 } general_housekeeping_stuff_t ;          // 
 
 general_housekeeping_stuff_t ghks ;
@@ -237,6 +243,8 @@ long lTimePrev ;
 long lTimePrev2 ;
 long lRebootCode = 0 ;
 long lMinUpTime = 0 ;
+bool bPrevConnectionStatus = false;
+unsigned long lTimeNext = 0 ;     // next network retry
 
 WiFiUDP ntpudp;
 WiFiUDP ctrludp;
@@ -519,6 +527,7 @@ unsigned short failcs;
 String msg ;
 int iRelayActiveState ;
 bool bSendCtrlPacket = false ;
+long lTD ;
 
   server.handleClient();
   OTAWebServer.handleClient();
@@ -703,7 +712,11 @@ bool bSendCtrlPacket = false ;
       tv.sunrise = Sunrise(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone) ;
       tv.sunset = Sunset(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone);
       tst = TrueSolarTime(tv.longitude, &tv.tc, ghks.fTimeZone);
-      tv.sunX = abs(tv.latitude) + decl ;
+      if ( tv.latitude <= 0 ) {
+        tv.sunX = abs(tv.latitude) + decl ;
+      }else{
+        tv.sunX = abs(tv.latitude) - decl ;      
+      }
       if (tv.solar_el_deg >= 0 ){           // day
         tv.iDayNight = 1 ;
       }else{                             // night
@@ -920,6 +933,41 @@ bool bSendCtrlPacket = false ;
       gps.encode(Serial.read());
     }  
   }  
+
+  if (!WiFi.isConnected())  {
+    lTD = (long)lTimeNext-(long) millis() ;
+    if (( abs(lTD)>40000)||(bPrevConnectionStatus)){ // trying to get roll over protection and a 30 second retry
+      lTimeNext = millis() - 1 ;
+/*      Serial.print(millis());
+      Serial.print(" ");
+      Serial.print(lTimeNext);
+      Serial.print(" ");
+      Serial.println(abs(lTD));*/
+    }
+    bPrevConnectionStatus = false;
+    if ( lTimeNext < millis() ){
+      Serial.println(String(buff )+ " Trying to reconnect WiFi ");
+      WiFi.disconnect(false);
+//      Serial.println("Connecting to WiFi...");
+      WiFi.mode(WIFI_AP_STA);
+      if ( ghks.lNetworkOptions != 0 ) {            // use ixed IP
+        WiFi.config(ghks.IPStatic, ghks.IPGateway, ghks.IPMask, ghks.IPDNS );
+      }
+      if ( ghks.npassword[0] == 0 ) {
+        WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point
+      } else {
+        WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
+      }
+      lTimeNext = millis() + 30000 ;
+    }
+  }else{
+    if ( !bPrevConnectionStatus  ){
+      ghks.MyIP = WiFi.localIP() ;
+      bPrevConnectionStatus = true ;
+    }
+  }  
+
+  
 //  dnsServer.processNextRequest();
 }   // ####################  BOTTOM OF LOOP  ###########################################
 
