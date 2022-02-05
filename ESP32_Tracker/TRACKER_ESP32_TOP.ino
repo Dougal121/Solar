@@ -8,12 +8,12 @@
  *      
  *  Compiles for LOLIN D32 @ 80Mhz
  */
-#include <esp_task_wdt.h>
-#include <WiFi.h>
-#include <WiFiClient.h>
-#include <WebServer.h>
-#include <ESPmDNS.h>
-#include <WiFiUDP.h> 
+#include <esp_task_wdt.h>    // part of the ESP stuff from board manager 
+#include <WiFi.h>            // arduino inbuilt 
+#include <WiFiClient.h>      // arduino inbuilt 
+#include <WebServer.h>       // arduino inbuilt 
+#include <ESPmDNS.h>         // part of the ESP stuff from board manager
+#include <WiFiUDP.h>         // arduino inbuilt 
 
 //#include <DNSServer.h>
 #include <TimeLib.h>         // arduino standard book of spells   
@@ -26,7 +26,7 @@
 #include <SFE_BMP180.h>      // Sparkfun github
 #include <TinyGPS.h>            
 #include "ht16k33.h"         // changed the default constructor (changed copy it in github under libs for this project)
-#include <Update.h>
+#include <Update.h>          // arduino inbuilt 
 
 
 #include "SSD1306.h"         // these 3 come from the standard book of spells (arduinoo IDE lib manager)
@@ -36,7 +36,7 @@
 
 #define BUFF_MAX 32
 
-#include "StaticPages.h"
+#include "StaticPages.h"      // part of this project (tab top right) 
 
 
 
@@ -790,7 +790,11 @@ long lTD ;
       tv.sunrise = Sunrise(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone) ;
       tv.sunset = Sunset(tv.longitude, tv.latitude, &tv.tc, ghks.fTimeZone);
       tst = TrueSolarTime(tv.longitude, &tv.tc, ghks.fTimeZone);
-      tv.sunX = abs(tv.latitude) + decl ;
+      if ( tv.latitude <= 0 ) {
+        tv.sunX = abs(tv.latitude) - decl ;
+      }else{
+        tv.sunX = abs(tv.latitude) + decl ;
+      }
       if (tv.solar_el_deg >= 0 ){            // day
         tv.iDayNight = 1 ;
       }else{                                 // night
