@@ -608,17 +608,19 @@ void ZeroSolarLogsMemory(void){
 
 void UpDateSolarLogs(void){
   long j = 0 ;
-  if (((minute() % 15) == 0 ) &&  (second() == 0 )) { // data logging  
-    j = (hour() * 4) +  ( minute() / 15 ) ;
-    SolarLog.RecDate = now();
-    SolarLog.Temp = tv.gT ; 
-    SolarLog.Wind = 0 ;           
-    SolarLog.Pressure = tv.Pr ;
-    SolarLog.XAngle = tv.xzAng ;
-    SolarLog.YAngle = tv.yzAng ;
-    SolarLog.XTarget = tv.xzTarget ;
-    SolarLog.YTarget = tv.yzTarget ;  
-    rtceeprom.eeprom_write(j*sizeof(solar_log_t),(byte *)&SolarLog,sizeof(solar_log_t)) ;    // write blocks
+  if  ( hasRTC ){
+    if (((minute() % 15) == 0 ) &&  (second() == 0 )) { // data logging  
+      j = (hour() * 4) +  ( minute() / 15 ) ;
+      SolarLog.RecDate = now();
+      SolarLog.Temp = tv.gT ; 
+      SolarLog.Wind = 0 ;           
+      SolarLog.Pressure = tv.Pr ;
+      SolarLog.XAngle = tv.xzAng ;
+      SolarLog.YAngle = tv.yzAng ;
+      SolarLog.XTarget = tv.xzTarget ;
+      SolarLog.YTarget = tv.yzTarget ;  
+      rtceeprom.eeprom_write(j*sizeof(solar_log_t),(byte *)&SolarLog,sizeof(solar_log_t)) ;    // write blocks
+    }
   }
 }
 

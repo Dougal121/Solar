@@ -1103,11 +1103,13 @@ void handleRoot() {
 void SendHTTPPageFooter(){
   String message = F("<br><br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br>");
   message += F("<a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>") ;
-  message += F("<a href='/eeprom'>EEPROM Memory Contents</a><br>");
-  message += F("<a href='/rtceeprom'>RTC EEPROM Memory Contents (Solar Log Area)</a><br>");  
   message += F("<a href='/sensor'>Sensor Calibration</a><br>");
-  message += F("<a href='/solarlog'>Data Log Tabular Output</a><br>");
-  message += F("<a href='/solarchart'>Solar Log as Chart</a><br>");
+  message += F("<a href='/eeprom'>EEPROM Memory Contents</a><br>");
+  if  ( hasRTC ){  
+    message += F("<a href='/rtceeprom'>RTC EEPROM Memory Contents (Solar Log Area)</a><br>");  
+    message += F("<a href='/solarlog'>Data Log Tabular Output</a><br>");
+    message += F("<a href='/solarchart'>Solar Log as Chart</a><br>");
+  }
   message += F("<a href='/info'>Node Infomation</a><br>");
   message += F("<a href='/setup'>WiFi Setup</a><br>");
   message += F("<a href='/email'>Email Setup</a><br>");
