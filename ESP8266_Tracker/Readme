@@ -22,3 +22,9 @@ All tested on hardware in the workshop now so should be a little better.
 08/05/2020  Did a minor update but not tested on full hardware yet - just the CPU.(for an uptime meter)
 
 2022/01/05 - Finially got around to doing that fix for Northern Hemisphere
+
+2022/06/07 - Epic Update this time.  
+Email Alarms + Wind Parking / Control for multiple trackes + time sync.
+Changed web GUI code to transmit bigger packets.
+Also added data loggining into the RTC module memory + download of data to CSV
+For added buzz there is a chart output using google charts.
