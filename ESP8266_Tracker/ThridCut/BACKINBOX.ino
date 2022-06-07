@@ -1,8 +1,9 @@
 void BackIntheBoxMemory(){
   uint8_t i , j ;
 
-  ghks.lVersion = LVER ;
-  
+//  ghks.lVersion = LVER ;
+  ghks.lVersion = MYVER_NEW ;
+    
   for ( i = 0 ; i < sizeof(ghks.npassword) ; i++ ){     
     ghks.npassword[i] = 0 ;  
   }
@@ -13,8 +14,8 @@ void BackIntheBoxMemory(){
     ghks.cpassword[i] = 0 ;  
   }
 
-  sprintf(ghks.nssid,"************\0");  // put your default credentials in here if you wish
-  sprintf(ghks.npassword,"********\0");  // put your default credentials in here if you wish
+//  sprintf(ghks.nssid,"************\0");  // put your default credentials in here if you wish
+//  sprintf(ghks.npassword,"********\0");  // put your default credentials in here if you wish
   
 
   
@@ -29,6 +30,25 @@ void BackIntheBoxMemory(){
   ghks.MyIP[1] = 0 ; 
   ghks.MyIP[2] = 0 ;
   ghks.MyIP[3] = 0 ;
+
+  ghks.lNetworkOptions = 0 ;     // DHCP 
+  ghks.IPStatic[0] = 192 ;
+  ghks.IPStatic[1] = 168 ;
+  ghks.IPStatic[2] = 2 ;
+  ghks.IPStatic[3] = 123 ;
+
+  ghks.IPGateway[0] = 192 ;
+  ghks.IPGateway[1] = 168 ;
+  ghks.IPGateway[2] = 2 ;
+  ghks.IPGateway[3] = 1 ;
+
+  ghks.IPDNS = ghks.IPGateway ;
+
+  ghks.IPMask[0] = 255 ;
+  ghks.IPMask[1] = 255 ;
+  ghks.IPMask[2] = 255 ;
+  ghks.IPMask[3] = 0 ;
+
   
   tv.xzH = 4.0;             // hysterisis NS
   tv.yzH = 4.0;             //    ""      EW
@@ -53,10 +73,10 @@ void BackIntheBoxMemory(){
   tv.iTrackMode = 0 ;
   tv.iUseGPS = 0 ;
     
-//  tv.latitude = -34.051219 ;
-//  tv.longitude = 142.013618 ;
-  tv.latitude = 47.8289 ;
-  tv.longitude = 20.1173 ;
+  tv.latitude = -34.051219 ;
+  tv.longitude = 142.013618 ;
+//  tv.latitude = 47.8289 ;
+//  tv.longitude = 20.1173 ;
 
   ghks.fTimeZone = 10.0 ;  
   tv.xMul = 1.0 ;  
@@ -68,18 +88,32 @@ void BackIntheBoxMemory(){
   tv.iUseGPS = 0 ;
   tv.iMaxWindSpeed = 0 ;    // disable
   tv.iMaxWindTime = 15 ;    // 15 seconds of max speed parks the arrray
-  tv.iMinWindTime = 180 ;   // 180 secodns to resume tracking 
+  tv.iMinWindTime = 300 ;   // 180 secodns to resume tracking 
   tv.iMountType = 0 ;       // equitorial
   tv.iOutputType = 0 ;      // Output circuit type 
   tv.iTimeSource = 0 ;
   tv.fWindSpeedCal = 1.0 ;
   tv.iWindInputSource = 0 ;
+  tv.iTempInputSource = 0 ; 
+  tv.Pos_Alarm_Mode = 0 ; 
+  tv.Temp_Alarm1 = 0 ; 
+  tv.Temp_Alarm2 = 0 ; 
+  tv.Temp_Alarm_Mode = 0 ;
+  tv.Temp_Alarm_Delay = 600 ;
+  sprintf(tv.Temp_Unit,"C\0");
+  
   ghks.MyIPC = IPAddress(192,168,5 +(ESP.getChipId() & 0x7f ) ,1);
   tv.xMaxMotorSpeed = MAX_MOTOR_PWM ;
   tv.yMaxMotorSpeed = MAX_MOTOR_PWM ;
   sprintf(tv.trackername,"Most Excellent\0");
   sprintf(ghks.cssid , "Configure_%X\0",ESP.getChipId()) ;
   bSaveReq = 1 ;
+  
+  sprintf(ghks.ADC_Unit,"km/h\0");
+  ghks.ADC_Cal_Ofs = 0 ;
+  ghks.ADC_Cal_Mul = 1.0 ;
+  
+  ResetSMTPInfo();
 }
 
 
@@ -89,8 +123,20 @@ int eeAddress ;
     eeAddress = 0 ;
     EEPROM.get(eeAddress,ghks);
     eeAddress += sizeof(ghks) ;
+    Serial.println("GHKSl Load EEPROM adress " +String(eeAddress));   
+    
+    if (ghks.lVersion  == MYVER_NEW){
+//      eeAddress = PROG_BASE_NEW ;  // 192 which is 48 * sizeof(float)      
+    }else{
+//      eeAddress = PROG_BASE ;  // 192 which is 48 * sizeof(float)
+    }    
     EEPROM.get(eeAddress,tv) ; 
     eeAddress += sizeof(tv) ;
+    Serial.println("TV Load EEPROM adress " +String(eeAddress));   
+
+    EEPROM.get(eeAddress,SMTP);
+    eeAddress += sizeof(SMTP) ;
+    
     Serial.println("Final Load EEPROM adress " +String(eeAddress));   
     
     tv.xzH = constrain(tv.xzH,ANG_ABS_MIN_HYS_NS,ANG_ABS_MAX_HYS_NS);          // NS Bullshit detectors and correctors 
@@ -119,7 +165,7 @@ int eeAddress ;
       tv.dyParkWind = constrain(tv.dyParkWind ,ANG_ABS_MIN_AZ ,ANG_ABS_MAX_AZ ); // Az      
     }
   
-    tv.iTrackMode = constrain(tv.iTrackMode,-1,5);
+    tv.iTrackMode = constrain(tv.iTrackMode,-1,6);
       
     tv.latitude = constrain(tv.latitude,-90.0,90.0);
     tv.longitude = constrain(tv.longitude,-180.0,180.0);
@@ -152,8 +198,15 @@ int eeAddress ;
     eeAddress = 0 ;
     EEPROM.put(eeAddress,ghks);
     eeAddress += sizeof(ghks) ;
+
+//    eeAddress = PROG_BASE_NEW ;
+        
     EEPROM.put(eeAddress,tv);
-    eeAddress += sizeof(tv) ;
+    eeAddress += sizeof(tv) ;   
+
+    EEPROM.put(eeAddress,SMTP);
+    eeAddress += sizeof(SMTP) ;
+        
     Serial.println("Final Save EEPROM adress " +String(eeAddress));   
     EEPROM.commit();                                                       // save changes in one go ???
   }
