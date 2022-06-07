@@ -13,3 +13,10 @@ Also the ongoing changes to the Wireless startup... Why cant I nail this !!!
          A tweek for the NTP time to only update if withing 20min of RTC except on startup (first NTP update)
          Start of being able to select a clock source/methodology.
          Fix issue with night power down & timezones. Add new OLED indicator for when actively powered down.
+         
+07/06/2022 Epic update ... but yet to be all tested together (part tested separatly)
+         Wind parking finally done
+         One more on clock source from other trackers so you can cascade the GPS time via UDP broacasts
+         Email alarms, Temperature alarms, Auto reboot timers, Uptimer
+         Data Loggin, Charting ,CSV downloads
+         4 new web pages in the GUI
