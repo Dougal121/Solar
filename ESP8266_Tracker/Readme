@@ -28,3 +28,4 @@ Email Alarms + Wind Parking / Control for multiple trackes + time sync.
 Changed web GUI code to transmit bigger packets.
 Also added data loggining into the RTC module memory + download of data to CSV
 For added buzz there is a chart output using google charts.
+This is still all in testing ... Your milage may vary.
