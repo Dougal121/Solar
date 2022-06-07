@@ -4,52 +4,61 @@ char nURL[64] = "http://192.168.2.24:86/default.asp" ;  // url so end data to
 int  httpCode = 0 ; 
 
 
-unsigned long sendCTRLpacket(IPAddress address){
+unsigned long sendCTRLpacket(){
 int j ;  
 byte packetBuffer[64];           //buffer to hold outgoing packets  
-  Serial.println("sending CTRL packet...");
-                    
+tp_t  tp ;  
+
+  Serial.println("sending CTRL packet...");                    
   memset(packetBuffer, 0, sizeof(packetBuffer));    // set all bytes in the buffer to 0
 
-  ctrludp.beginPacket(address, ghks.RemotePortCtrl);      // Send control data to the remote port - Broadcast ???
-  ctrludp.write(packetBuffer, sizeof(packetBuffer));
-  ctrludp.endPacket();
+  tp.fWindSpeedVel = tv.fWindSpeedVel ;
+  tp.dtNow = now() ;
+
+  if  (( ghks.RCIP[0] == 0 ) &&  ( ghks.RCIP[1] == 0 ) && ( ghks.RCIP[2] == 0 ) && ( ghks.RCIP[3] == 0 ) && ( ghks.RemotePortCtrl != 0 )){
+    Serial.println("No DNS - no point sending NTP to 0.0.0.0 ");      
+  }else{
+    snprintf(buff, BUFF_MAX, "%u.%u.%u.%u\0",ghks.RCIP[0], ghks.RCIP[1], ghks.RCIP[2], ghks.RCIP[3]);
+    Serial.print("Sending CTRL packet - IP address: "+String(ghks.RemotePortCtrl)+" ->  ");
+    Serial.println(buff);
+    ctrludp.beginPacket( buff, ghks.RemotePortCtrl);                                 // Send control data to the remote port - Broadcast ???
+    ctrludp.write((byte *)&tp, sizeof(tp));
+    ctrludp.endPacket();
+  }
 }
 
 
-unsigned long processCtrlUDPpacket(long lSize){
+unsigned long processCtrlUDPpacket(long lSize){                     // should only get one per minute
 int i , j ;  
 unsigned long highWord ;
 unsigned long lowWord ;
 unsigned long lAddress ;
-byte packetBuffer[64];           //buffer to hold incomming packets  
+byte packetBuffer[64];                                              // buffer to hold incomming packets  
+tp_t  tp ;  
 
   Serial.println(F("Process Ctrl Packet "));
   memset(packetBuffer, 0, sizeof(packetBuffer));
-  ctrludp.read(packetBuffer, sizeof(packetBuffer)); // read the packet into the buffer
-/*
-  highWord = word(packetBuffer[0], packetBuffer[1]);
-  lowWord = word(packetBuffer[2], packetBuffer[3]);
-  lAddress = highWord << 16 | lowWord;
+  ctrludp.read((byte *)&tp, sizeof(tp));                                     // read first bit packet into the buffer
 
-
-  if (( ghks.lNodeAddress == lAddress) || ( lAddress == 0xffffffff )){ // is our address or a braodcast
-      switch(packetBuffer[8] ){ // command byte
-        case 52:
-          j = packetBuffer[9] ; // number of valves to be read
-          for (i = 0 ; i < MAX_VALVE && ( i < j ) ; i++ ){
-            if (( packetBuffer[14+(i*6)] == ghks.lNodeAddress ) && ( packetBuffer[15+(i*6)] == i )){
-              lowWord = word(packetBuffer[10+(i*6)], packetBuffer[11+(i*6)]);  // recieve all the ttgs for the valves
-              vvalve[i].lTTG = lowWord ;
-              highWord = word(packetBuffer[12+(i*6)], packetBuffer[13+(i*6)]);  // recieve all the ttgs for the valves
-              vvalve[i].lATTG = highWord ;
-            }
-          }
-        break;
+  if ( year(tp.dtNow) > MINYEAR ) {                                 // if the time not good then assume the rest is crap
+    if ( tv.iWindInputSource == 1 ){
+      tv.fWindSpeedVel = tp.fWindSpeedVel ;
+    }
+    if ( tv.iTimeSource == 2 ){                                     // Use the network broadcast timeC
+      setTime((time_t)tp.dtNow) ;                                   // sync up the clocks
+      if (( hasRTC ) && ( minute(tp.dtNow) == 0 )) {                // update every hour
+        tv.tn.year = year();                                                              // record the last NTP time set
+        tv.tn.mon = month() ;
+        tv.tn.mday = day();
+        tv.tn.hour = hour();
+        tv.tn.min = minute();
+        tv.tn.sec = second();
+        DS3231_set(tv.tn);                                       // set the RTC if we have one and time looks non bullshit      
       }
+    }    
   }
-*/  
-  while (ctrludp.available()){  // clean out the rest of the packet and dump overboard
+
+  while (ctrludp.available()){                                      // clean out the rest of the packet and dump overboard
     ctrludp.read(packetBuffer, sizeof(packetBuffer));  
   }
 }

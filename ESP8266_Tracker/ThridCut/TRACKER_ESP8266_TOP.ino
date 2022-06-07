@@ -11,7 +11,9 @@
 #include <ESP8266mDNS.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266httpUpdate.h>
-
+#include <ESPMail.h>
+#include "uEEPROMLib.h"    // 
+#include <ESP8266Ping.h>
 
 //#include <DNSServer.h>
 #include <TimeLib.h>         // arduino standard book of spells   
@@ -30,7 +32,13 @@
 #include "SH1106Wire.h"
 #include "ds3231.h"          // this one is in the GitHub where you found this code - It has changed since I started back in 2016
 
+#define SOLAR_MAX_LOG 96     // number of logs in the solar recrds  128 possible in the 4k of memory
 #define BUFF_MAX 32
+#define MYVER 0x12345679         // change this if you change the structures that hold data that way it will force a "backinthebox" to get safe and sane values from eeprom
+#define MYVER_NEW 0x12345680     // change this if you change the structures that hold data that way it will force a "backinthebox" to get safe and sane values from eeprom
+
+const int PROG_BASE = 192 ;   // where the tv setup and program information starts in eeprom
+const int PROG_BASE_NEW = 320 ;   // where the tv setup and program information starts in eeprom
 
 const byte SETPMODE_PIN = D0 ; 
 const byte FLASH_BTN = D3 ;    // GPIO 0 = FLASH BUTTON 
@@ -38,6 +46,10 @@ const byte SCOPE_PIN = D3 ;
 const byte FACTORY_RESET = D0 ;
 const byte LED = BUILTIN_LED ;  // = D4 ;
 const byte MAX_WIFI_TRIES = 45 ;
+const int MAX_EEPROM = 2048 ;  // changes from 1000 circa Jun 2022
+
+uEEPROMLib rtceeprom(0x57);
+ESPMail WDmail;
 
 SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2                           onboard 0.96" LOED display as per picture
 //SH1106Wire display(0x3c, 4, 5);   // arse about ??? GPIO 5 = D1, GPIO 4 = D2       external 1.3" OLED display for a D1 R2 etc
@@ -65,7 +77,8 @@ SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2                      
 #define ANG_ABS_MAX_OFS_NS 20.0
 #define ANG_ABS_MIN_OFS_NS -20.0
 
-#define MINYEAR 2018
+#define MINYEAR 2021
+#define MIN_REBOOT  720             //   720   12 hours normally      10 min for testing
 
 #define MOTOR_DWELL 100
 #define MAX_MOTOR_PWM 1000
@@ -90,8 +103,8 @@ static bool hasRTC = false;
 static bool hasPres = false ;
 
 char dayarray[8] = {'S','M','T','W','T','F','S','E'} ;
-char Toleo[10] = {"Ver 3.8\0"}  ;
-#define LVER 3
+char Toleo[10] = {"Ver 3.9\0"}  ;
+
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
   unsigned int localPort = 2390;          // 2 local port to listen for NTP UDP packets
@@ -117,7 +130,16 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   IPAddress IPGateway ;                   //     
   IPAddress IPMask ;                      //  
   IPAddress IPDNS ;                       //  
-
+  long SelfReBoot ;
+  long lRebootTimeDay ;
+  float ADC_Cal_Mul ;
+  float ADC_Cal_Ofs ;
+  char  ADC_Unit[5] ;                     // units for display
+  uint8_t  ADC_Alarm_Mode ;               // high low etc   0x80 Contious enable 0x40 Master Valve Only Enable  0x20  Alram 2 master  0x10 Alarm 1 master     0x02 Alarm 1 high   0x01 Alarm 2 high
+  float ADC_Alarm1 ;
+  float ADC_Alarm2 ;                      // 
+  uint16_t  ADC_Alarm_Delay ;             // trigger to alarm in seconds
+  long    spare[20];                      // padding to use up next time
 } general_housekeeping_stuff_t ;          // 
 
 general_housekeeping_stuff_t ghks ;
@@ -210,9 +232,54 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int iWindInputSource ;         //  
   float fWindSpeedCal  ;         //  
   float fWindSpeedVel  ;         //  
+  int iTempInputSource ;         //  
+  uint16_t  Temp_Alarm_Delay ;            // trigger to temp alarm in seconds
+  float Temp_Alarm1 ;
+  float Temp_Alarm2 ;                      // 
+  char  Temp_Unit[5] ;                     // units for display
+  uint8_t Temp_Alarm_Mode ;               // high low etc   0x80 Contious enable 0x40 Master Valve Only Enable  0x20  Alram 2 master  0x10 Alarm 1 master     0x02 Alarm 1 high   0x01 Alarm 2 high
+  uint8_t Pos_Alarm_Mode ;                //    0x80 Maaster enable   
+  long  Spare[20] ;                       // padding for next time
 } tracker_stuff_t ;        // 
 
 tracker_stuff_t   tv   ;    // tracker variables
+
+typedef struct __attribute__((__packed__)) {     // trackert packet
+  float fWindSpeedVel  ;         //  
+  time_t dtNow ;                 //   if set to non zero this will trigger a time set event
+}tp_t ;
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  int  port;
+  char server[48] ;
+  char user[48] ;
+  char password[48] ;
+  char FROM[48] ;
+  char TO[48] ;
+  char CC[48] ;
+  char BCC[48] ;
+  bool bSecure ;
+  char message[64] ;
+  char subject[64] ;
+  bool bUseEmail ;
+  float LowTankQty ;
+  bool bSPARE ; 
+} Email_App_stuff_t ;          
+
+Email_App_stuff_t SMTP;
+
+typedef struct __attribute__((__packed__)) {            
+  long RecDate ;
+  float Temp ; 
+  float Wind ;           
+  float Pressure ;
+  float XAngle ;
+  float YAngle ;
+  float XTarget ;
+  float YTarget ;
+} solar_log_t ;                 // 8 * 4 bytes  = 32 per log   AT24C32 is 4096 bytes so 128 possible samples if we use as a flat file
+
+solar_log_t  SolarLog ;
 
 bool bNTPFirst = false ; 
 int iPMode;
@@ -235,16 +302,31 @@ bool bConfig = false ;
 uint8_t rtc_status ;
 float decl ;
 float eqtime ;
+float Temp_Value ; 
 bool iOutputActive = 0 ;
-
+long  MyCheckSum ;
+long  MyTestSum ;
 bool bMagCal = false ;
 bool bDoTimeUpdate = false ;
+bool bSendTestEmail = false ;
+bool bSolarLogDirty = false ;
 long lTimePrev ;
 long lTimePrev2 ;
 long lRebootCode = 0 ;
+int iUploadPos = 0 ;
+int iWindUpTmr = 0 ;
+int iWindDnTmr = 0 ;
+bool bToWindy = false ;
 long lMinUpTime = 0 ;
 bool bPrevConnectionStatus = false;
 unsigned long lTimeNext = 0 ;     // next network retry
+long lRet_Email = 0 ;
+float ADC_Value = 0 ;
+int   ADC_Raw = 0 ; 
+bool  bSentADCAlarmEmail = false ;
+long ADC_Trigger = 0 ;
+int   iAutoResetStatus = 0 ; 
+time_t NowTime ;
 
 WiFiUDP ntpudp;
 WiFiUDP ctrludp;
@@ -270,11 +352,12 @@ String host ;
   pinMode(LED,OUTPUT);                  //  builtin LED
   pinMode(SETPMODE_PIN,INPUT_PULLUP);   // flashy falshy
 
-  EEPROM.begin(1024);                   // open our safe and sacrate repository
+  EEPROM.begin(MAX_EEPROM);                   // open our safe and sacrate repository
   LoadParamsFromEEPROM(true);
 
   Serial.println(ghks.cssid[0]);
-  if (( ghks.cssid[0] == 0x00 ) || ( ghks.cssid[0] == 0xff ) || ( ghks.lVersion != LVER )){   // pick a default setup ssid if none
+  if (( MYVER != ghks.lVersion ) && ( MYVER_NEW != ghks.lVersion )) {
+//  if (( ghks.cssid[0] == 0x00 ) || ( ghks.cssid[0] == 0xff ) || ( ghks.lVersion != LVER )){   // pick a default setup ssid if none
     Serial.println("Blank Memory - Resetting Memory to Defaults");
     BackIntheBoxMemory();           // blank memory detector - cssid should be a roach motel... once set should stay that way
   }
@@ -455,10 +538,17 @@ String host ;
   server.on("/", handleRoot);                        // setup web interface server
   server.on("/setup", handleRoot);
   server.on("/scan", i2cScan);
-  server.on("/eeprom", DisplayEEPROM);  
+  server.on("/eeprom", DisplayEEPROM);
+  server.on("/rtceeprom",DisplayRTCEEPROM);
+  server.on("/solarlog",DisplaySolarLog);  
+  server.on("/solarchart",DisplaySolarChart);
+  server.on("/email", DisplayEmailSetup);    
   server.on("/info", handleInfo);  
   server.on("/stime", handleRoot);
   server.on("/sensor",handleRoot);
+  server.on("/backup", HTTP_GET , handleBackup);
+  server.on("/backup.txt", HTTP_GET , handleBackup);
+  server.on("/backup.txt", HTTP_POST,  handleRoot, handleFileUpload);  
   server.onNotFound(handleNotFound);  
   server.begin();
   Serial.println("HTTP server started");
@@ -528,6 +618,12 @@ String msg ;
 int iRelayActiveState ;
 bool bSendCtrlPacket = false ;
 long lTD ;
+bool bTrigger = false ;
+int iMailMsg = 0 ;
+int iHM = 0 ; 
+int iDOW = 0 ;
+int iRebootTime = 0 ;
+
 
   server.handleClient();
   OTAWebServer.handleClient();
@@ -722,94 +818,196 @@ long lTD ;
       }else{                             // night
         tv.iDayNight = 0 ;
       }
-    }
+    
 
-    if (tv.iMountType == 0){         // EQUITORIAL MOUNT
-      switch (tv.iTrackMode) {
-        case 4: // both axis to park
-          tv.yzTarget = tv.dyPark ;  // night park position  E/W
-          tv.xzTarget = tv.dxPark ;  // night park position  N/S
-          break ;
-        case 3: // both axis off no tracking
-          break ;
-        case 2: // xz tracking  NS
-          if ( tv.iDayNight == 1 ) {
-            tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
-          } else {
-            tv.xzTarget = tv.dxPark ;  // night park position
-          }
-          break;
-        case 1:  // yz tracking   EW
-          if (tv.iDayNight == 1) {
-            tv.yzTarget = tv.ha ;
-          } else {
-            tv.yzTarget = tv.dyPark ;  // night park position
-          }
-          break;
-        case -1: // set target to tracking and park both at nigh
-          if (tv.iDayNight == 1) {
-            tv.yzTarget = tv.ha ;
-            tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
-          } else {
+      if (tv.iMountType == 0){         // EQUITORIAL MOUNT
+        switch (tv.iTrackMode) {
+          case 6: // both axis to park
+            tv.yzTarget = tv.dyParkWind ;  // night park position  E/W
+            tv.xzTarget = tv.dxParkWind ;  // night park position  N/S
+            break ;
+          case 4: // both axis to park
             tv.yzTarget = tv.dyPark ;  // night park position  E/W
             tv.xzTarget = tv.dxPark ;  // night park position  N/S
-          }
+            break ;
+          case 3: // both axis off no tracking
+            break ;
+          case 2: // xz tracking  NS
+            if ( tv.iDayNight == 1 ) {
+              tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
+            } else {
+              tv.xzTarget = tv.dxPark ;  // night park position
+            }
+            break;
+          case 1:  // yz tracking   EW
+            if (tv.iDayNight == 1) {
+              tv.yzTarget = tv.ha ;
+            } else {
+              tv.yzTarget = tv.dyPark ;  // night park position
+            }
+            break;
+          case -1: // set target to tracking and park both at nigh
+            if (tv.iDayNight == 1) {
+              tv.yzTarget = tv.ha ;
+              tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
+            } else {
+              tv.yzTarget = tv.dyPark ;  // night park position  E/W
+              tv.xzTarget = tv.dxPark ;  // night park position  N/S
+            }
+            break;
+          default: // set target to tracking
+            if (tv.iDayNight == 1) {
+              tv.yzTarget = tv.ha ;
+              tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
+            } else {
+              tv.yzTarget = tv.dyPark ;  // night park position (dont park the other - leave till morning)
+            }
+            break;
+        }
+        tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // NS   constain function... very cool - dont leave home without it !
+        tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW 
+      }else{
+        switch (tv.iTrackMode) {      // ALT/AZ MOUNT
+          case 6: // both axis to park
+            tv.yzTarget = AzFix(tv.dyParkWind) ;  // night park position  Az
+            tv.xzTarget = tv.dxParkWind ;  // night park position  Alt
+            break ;
+          case 4: // both axis to park
+            tv.yzTarget = AzFix(tv.dyPark) ;  // night park position  Az
+            tv.xzTarget = tv.dxPark ;  // night park position  Alt
+            break ;
+          case 3: // both axis off no tracking
+            break ;
+          case 2: // xz tracking  Alt
+            if ( tv.iDayNight == 1 ) {
+              tv.xzTarget = 90 - tv.solar_el_deg ; // Alt  need to map the coordinate system correctly
+            } else {
+              tv.xzTarget = tv.dxPark ;       // Az   night park position
+            }
           break;
-        default: // set target to tracking
-          if (tv.iDayNight == 1) {
-            tv.yzTarget = tv.ha ;
-            tv.xzTarget = tv.sunX ; // need to map the coordinate system correctly
-          } else {
-            tv.yzTarget = tv.dyPark ;  // night park position (dont park the other - leave till morning)
+          case 1:  // yz tracking   Az
+            if (tv.iDayNight == 1) {
+              tv.yzTarget = AzFix(tv.solar_az_deg) ; // Az
+            } else {
+              tv.yzTarget = AzFix(tv.dyPark) ;       // Alt  night park position
+            }
+            break;
+          case -1: // set target to tracking and park both at nigh
+            if (tv.iDayNight == 1) {
+              tv.yzTarget = AzFix(tv.solar_az_deg) ; // Az
+              tv.xzTarget = 90 - tv.solar_el_deg ;        // Alt  need to map the coordinate system correctly
+            } else {
+              tv.yzTarget = AzFix(tv.dyPark) ;       // night park position 
+              tv.xzTarget = tv.dxPark ;              // 
+            }
+            break;
+          default: // set target to tracking
+            if (tv.iDayNight == 1) {
+              tv.yzTarget = AzFix(tv.solar_az_deg) ;  // Az 
+              tv.xzTarget = 90 - tv.solar_el_deg ;         // Alt  need to map the coordinate system correctly
+            } else {
+              tv.yzTarget = AzFix(tv.dyPark) ;        // night park position (dont park the other - leave till morning)
+            }
+            break;
+        }
+        if ( bToWindy ) {              // if windy go to wind park position
+          tv.xzTarget = tv.dxParkWind ;  // wind park position  Alt
+          if (tv.iMountType == 0){  
+            tv.yzTarget = tv.dyParkWind ;  // wind park position  Az            
+          }else{
+            tv.yzTarget = AzFix(tv.dyParkWind) ;  // wind park position  Az
           }
-          break;
+        }
+        tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // NS / Alt
+        tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW / Az   
       }
-      tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // NS   constain function... very cool - dont leave home without it !
-      tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW 
-    }else{
-      switch (tv.iTrackMode) {      // ALT/AZ MOUNT
-        case 4: // both axis to park
-          tv.yzTarget = AzFix(tv.dyPark) ;  // night park position  Az
-          tv.xzTarget = tv.dxPark ;  // night park position  Alt
-          break ;
-        case 3: // both axis off no tracking
-          break ;
-        case 2: // xz tracking  Alt
-          if ( tv.iDayNight == 1 ) {
-            tv.xzTarget = 90 - tv.solar_el_deg ; // Alt  need to map the coordinate system correctly
-          } else {
-            tv.xzTarget = tv.dxPark ;       // Az   night park position
-          }
-        break;
-        case 1:  // yz tracking   Az
-          if (tv.iDayNight == 1) {
-            tv.yzTarget = AzFix(tv.solar_az_deg) ; // Az
-          } else {
-            tv.yzTarget = AzFix(tv.dyPark) ;       // Alt  night park position
-          }
-          break;
-        case -1: // set target to tracking and park both at nigh
-          if (tv.iDayNight == 1) {
-            tv.yzTarget = AzFix(tv.solar_az_deg) ; // Az
-            tv.xzTarget = 90 - tv.solar_el_deg ;        // Alt  need to map the coordinate system correctly
-          } else {
-            tv.yzTarget = AzFix(tv.dyPark) ;       // night park position 
-            tv.xzTarget = tv.dxPark ;              // 
-          }
-          break;
-        default: // set target to tracking
-          if (tv.iDayNight == 1) {
-            tv.yzTarget = AzFix(tv.solar_az_deg) ;  // Az 
-            tv.xzTarget = 90 - tv.solar_el_deg ;         // Alt  need to map the coordinate system correctly
-          } else {
-            tv.yzTarget = AzFix(tv.dyPark) ;        // night park position (dont park the other - leave till morning)
-          }
-          break;
+    }  
+    
+    ADC_Raw = analogRead(A0) ;
+    ADC_Value = ghks.ADC_Cal_Mul * ( 1.0 * ADC_Raw  + ghks.ADC_Cal_Ofs ) / 1023  ;
+    if ( tv.iWindInputSource == 0 ){
+      tv.fWindSpeedVel = ADC_Value ;  // copy over the wind speed
+    }
+    if (( tv.fWindSpeedVel > tv.iMaxWindSpeed ) && (tv.iMaxWindSpeed != 0 ) && !bToWindy ) { // winspeed above the limmit and limmit not set to zero start the counter
+      iWindUpTmr ++ ;
+      iWindDnTmr = 0 ; 
+      if ( iWindUpTmr > tv.iMaxWindTime ) {
+        bToWindy = true ;
+        SendEmailToClient(2);                           // email too windy        
       }
-      tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // NS / Alt
-      tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW / Az   
+    }
+    if (( tv.fWindSpeedVel < tv.iMaxWindSpeed ) && bToWindy ) { // winspeed under the limmit and limmit not set to zero start the counter
+      iWindDnTmr ++ ;
+      iWindUpTmr = 0 ;
+      if ( iWindDnTmr > tv.iMinWindTime ) {
+        bToWindy = false ;
+        iWindDnTmr == 0 ;
+        SendEmailToClient(3);                           // email ok again        
+      }
+    }
+    if (tv.iMaxWindSpeed == 0 ){
+      bToWindy = false ;   // if you disable it return to tracking straigh away
     }
     
+    if (( ghks.ADC_Alarm_Mode & 0x80 ) != 0 ) {
+      bTrigger = false ;
+      if ((( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ) )  {    // alarm 1 on 
+        if (( ghks.ADC_Alarm_Mode & 0x01 ) != 0 ){ // looking for a high alarm else jump down for a low on
+          if ( ADC_Value > ghks.ADC_Alarm1 ) {     // high alarm test 
+            bTrigger = true ;  
+            if (( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ){  // this is the always case
+              iMailMsg = 5 ;                            
+            }
+          }          
+        }else{
+          if ( ADC_Value < ghks.ADC_Alarm1 ) { // low alarm test
+            bTrigger = true ;
+            if (( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ){   // this is the always case
+              iMailMsg = 7 ;                                              
+            }
+          }          
+        }
+      }
+      if ((( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ) )  {    // alarm 2 on 
+        if (( ghks.ADC_Alarm_Mode & 0x08 ) != 0 ){   // looking for a high alarm on number 2 else jump down for the low one
+          if ( ADC_Value > ghks.ADC_Alarm2 ) {       //  check the level
+            bTrigger = true ;      
+            if (( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ){  // this is the always active
+                iMailMsg = 6 ;                                
+            }
+          }          
+        }else{
+          if ( ADC_Value < ghks.ADC_Alarm2 ) {        // check the low alarm 
+            bTrigger = true ;
+            if (( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ){   // this is the always active
+                iMailMsg = 8 ;     // alarm 2 always                           
+            }
+          }          
+        }
+      }
+        
+      if ( bTrigger ) {
+        if (!bSentADCAlarmEmail) {
+          ADC_Trigger++ ;           
+        }               
+      }else{
+        ADC_Trigger = 0 ;      
+        iMailMsg = 0 ;
+      }
+      if (ADC_Trigger > ghks.ADC_Alarm_Delay) {
+        if ( !bSentADCAlarmEmail ){
+          if ( iMailMsg != 0 ){
+            SendEmailToClient(iMailMsg) ;
+          }
+          bSentADCAlarmEmail = true ;
+        }
+      }
+    }else{
+      ADC_Trigger = 0 ;
+      iMailMsg = 0 ;
+      bSentADCAlarmEmail = false ;
+    }
+
     DisplayMeatBall() ;
 
     if ( hasGyro ){
@@ -827,7 +1025,26 @@ long lTD ;
       LoadParamsFromEEPROM(true);
       tv.iDoSave = 0 ;  // only do once
     }
+    switch(tv.iTempInputSource){
+      case 0:
+        Temp_Value = rtc_temp ;
+      break;
+      case 1:
+        Temp_Value = tv.gT ;
+      break;
+      case 2:
+      break;
+      case 3:
+      break;
+    }
+  }else{                        // end of the once per second stuff
+    if ( bSendTestEmail ){
+      SendEmailToClient(-1) ;
+      bSendTestEmail = false ;
+    }
   }
+
+
 
   if (rtc_hour != hour()){
     if ( tv.iTimeSource == 0 ){ // just use the RTC
@@ -852,9 +1069,62 @@ long lTD ;
       }     
     }
     rtc_hour = hour(); 
-  }
+  }                                // #### END OF HOURLY STUFF
+  
   if ( rtc_min != minute()){
     lMinUpTime++ ;
+    if (( lMinUpTime == 3 ) && SMTP.bUseEmail ) {
+      SendEmailToClient(-2);                         // email that reboot just occureed  
+    }
+    
+    iAutoResetStatus = 0 ;
+    if (  ghks.SelfReBoot > 0 ) {
+      iAutoResetStatus = 1 ;
+      if ( lMinUpTime > MIN_REBOOT ) {
+        iAutoResetStatus = 2 ;
+        if ( lMinUpTime == ghks.SelfReBoot  ) {
+          iAutoResetStatus = 3 ;
+          if ( SMTP.bUseEmail ){
+            SendEmailToClient(-3);                           // email intention to reboot on minute before you pull the pin
+          }
+        }
+        if ( lMinUpTime > ghks.SelfReBoot ) {
+          IndicateReboot() ;
+        }
+      }
+    }
+    NowTime = now() + 60 ;
+    i = ( hour(NowTime) * 100 ) + minute(NowTime) ;
+    iHM = ( hour() * 100 ) + minute() ;
+    iRebootTime = ghks.lRebootTimeDay & 0xfff ;
+    iDOW = dayOfWeek(now()) ;
+    if (( ghks.lRebootTimeDay & 0x80000 ) != 0 ) {   // enabled and the right day
+      iAutoResetStatus = -1 ;
+      if (( ghks.lRebootTimeDay & ( 0x1000 << ( iDOW - 1))) != 0 )   {
+        iAutoResetStatus = -2 ;
+        if ( lMinUpTime > MIN_REBOOT ) { 
+          if (iRebootTime == 0 ){
+            if ( iHM == 2359 ) {
+              iAutoResetStatus = 3 ;
+              if (SMTP.bUseEmail){
+                SendEmailToClient(-3);                         // email intention to reboot on minute before you pull the pin
+              }
+            }         
+          }else{
+            if (i == iRebootTime ){
+              iAutoResetStatus = -3 ;
+              if (SMTP.bUseEmail){
+                SendEmailToClient(-3);                         // email intention to reboot on minute before you pull the pin
+              }
+            }          
+          }
+          if (iRebootTime == iHM ){
+            IndicateReboot() ;
+          }
+        }
+      }
+    }
+    
     if (hasPres){
       tv.Pr = getPressure((float *)&tv.gT) ;
     }
@@ -892,6 +1162,8 @@ long lTD ;
     }else{
       tv.iGPSLock = 0 ;   // if no lock loook at internal clock
     }  
+    UpDateSolarLogs();
+    sendCTRLpacket() ; 
   }
 
   if ( year() > MINYEAR ){ // dont move if date and time is rubbish

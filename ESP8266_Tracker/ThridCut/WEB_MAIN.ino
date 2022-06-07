@@ -124,7 +124,7 @@ void handleRoot() {
     i = String(server.argName(j)).indexOf("tmode");
     if (i != -1){  // have a request to set the tracking mode
       tv.iTrackMode = String(server.arg(j)).toInt() ;
-      if (( tv.iTrackMode < -1) || ( tv.iTrackMode > 5 )){
+      if (( tv.iTrackMode < -1) || ( tv.iTrackMode > 6 )){
         tv.iTrackMode = -1 ;
       }
     }        
@@ -285,10 +285,24 @@ void handleRoot() {
     i = String(server.argName(j)).indexOf("tmsrc");
     if (i != -1){  // time source
       tv.iTimeSource = String(server.arg(j)).toInt() ;
-      if (( tv.iTimeSource < 0) || ( tv.iTimeSource > 1 )){
+      if (( tv.iTimeSource < 0) || ( tv.iTimeSource > 2 )){
         tv.iTimeSource = 1 ;
       }
     }            
+    i = String(server.argName(j)).indexOf("spdsrc");
+    if (i != -1){  // time source
+      tv.iWindInputSource = String(server.arg(j)).toInt() ;
+      if (( tv.iWindInputSource < 0) || ( tv.iWindInputSource > 2 )){
+        tv.iWindInputSource = 0 ;
+      }
+    }            
+    i = String(server.argName(j)).indexOf("tempsrc");
+    if (i != -1){  // time source
+      tv.iWindInputSource = String(server.arg(j)).toInt() ;
+      if (( tv.iTempInputSource < 0) || ( tv.iTempInputSource > 4 )){
+        tv.iTempInputSource = 0 ;
+      }
+    }      
 
     i = String(server.argName(j)).indexOf("mltdr");
     if (i != -1){  // have a request to set the time zone
@@ -399,160 +413,151 @@ void handleRoot() {
 
   SendHTTPHeader();
   
-  server.sendContent(F("<link rel='icon' href='data:,'></head><body><html><center><h2>"));
-  server.sendContent(String(tv.trackername).substring(0,16)+" Solar Tracker</h2>");
+  message = F("<link rel='icon' href='data:,'></head><body><html><center><h2>");
+  message += String(tv.trackername).substring(0,16)+" Solar Tracker</h2>";
 
-  server.sendContent(F("<a href='/'>Refresh</a><br><br>")) ;   
+  message += F("<a href='/'>Refresh</a><br><br>") ;   
   if ( bSaveReq != 0 ){
-    server.sendContent(F("<blink>"));      
+    message += F("<blink>");      
   }
-  server.sendContent(F("<a href='/?command=2'>Save Parameters to EEPROM</a><br>")) ;         
-/*
-  snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
-  server.sendContent("<b>"+ String(buff)) ; 
-  if ( year() < 2018 ) {
-    server.sendContent(F("--- CLOCK NOT SET ---")) ;
-  }
-  server.sendContent(F("</b><br>")) ;*/  
+  message += F("<a href='/?command=2'>Save Parameters to EEPROM</a><br>") ;         
   if ( bSaveReq != 0 ){
-    server.sendContent(F("</blink><font color='red'><b>Changes Have been made to settings.<br>Make sure you save if you want to keep them</b><br></font>")) ;     
+    message += F("</blink><font color='red'><b>Changes Have been made to settings.<br>Make sure you save if you want to keep them</b><br></font>") ;     
   }
-  server.sendContent(F("<br>")) ;
-/*  if ( AutoOff_t > now() )  {
-    snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(AutoOff_t), month(AutoOff_t), day(AutoOff_t) , hour(AutoOff_t), minute(AutoOff_t), second(AutoOff_t));
-    server.sendContent(F("<b><font color=red>Automation OFFLINE Untill ")) ;  
-    server.sendContent(String(buff)) ; 
-    server.sendContent(F("</font></b><br>")) ; 
-  }else{
-    if ( year() > 2000 ) {
-      server.sendContent(F("<b><font color=green>Automation ONLINE</font></b><br>")) ;  
-    }
-  }
-*/
+  message += F("<br>") ;
+  server.sendContent(message) ;
+  message = "" ;
 
   if (String(server.uri()).indexOf("stime")>0) {  // setup of the node
     bDefault = false ;
     snprintf(buff, BUFF_MAX, "%04d/%02d/%02d %02d:%02d", year(), month(), day() , hour(), minute());
-    server.sendContent("<br><br><form method=get action=" + server.uri() + "><br>Set Current Time: <input type='text' name='stime' value='"+ String(buff) + "' size=12>");
-    server.sendContent(F("<input type='submit' value='SET'><br><br></form>"));
+    message = "<br><br><form method=get action=" + server.uri() + "><br>Set Current Time: <input type='text' name='stime' value='"+ String(buff) + "' size=12>";
+    message +=F("<input type='submit' value='SET'><br><br></form>");
+    server.sendContent(message) ;
+    message = "" ;
   }
 
   if (String(server.uri()).indexOf("sensor")>0) {  // setup of the node
     bDefault = false ;
-    server.sendContent(F("<a href='/sensor'>Update</a><br><br>")) ;         
-    server.sendContent(F("<br><b>Sensor Calibration System</b><table border=1 title='Magnetometer Sensor Calibration'><tr><th rowspan=2> Parameter</th><th colspan=3>Value</th></tr>")) ; 
-    server.sendContent(F("<tr><th>X (NS/Alt)</th><th>Y (EW/Az)</th><th>Z</th><th>.</th></tr>")) ; 
+    message = F("<a href='/sensor'>Update</a><br><br>") ;         
+    message += F("<br><b>Sensor Calibration System</b><table border=1 title='Magnetometer Sensor Calibration'><tr><th rowspan=2> Parameter</th><th colspan=3>Value</th></tr>") ; 
+    message += F("<tr><th>X (NS/Alt)</th><th>Y (EW/Az)</th><th>Z</th><th>.</th></tr>") ; 
 
-    server.sendContent(F("<tr><td>LSM303 Device Type</td><td colspan=3 align=center>")) ;
+    message += F("<tr><td>LSM303 Device Type</td><td colspan=3 align=center>") ;
     i = compass.getDeviceType() ;
-    server.sendContent(String(i)) ; 
+    message += String(i) ; 
     switch(i){
       case 0:
-        server.sendContent(String(" - DLH")) ; 
+        message += String(" - DLH") ; 
       break;
       case 1:
-        server.sendContent(String(" - DLM")) ; 
+        message += String(" - DLM") ; 
       break;
       case 2:
-        server.sendContent(String(" - DLHC")) ; 
+        message += String(" - DLHC") ; 
       break;
       case 3:
-        server.sendContent(String(" - D")) ; 
+        message += String(" - D") ; 
       break;
       default:
-        server.sendContent(String(" - AUTO")) ; 
+        message += String(" - AUTO") ; 
       break;
     }
-    server.sendContent(F("</td><td align=center></td>.</tr>"));
+    message += F("</td><td align=center></td>.</tr>");
     
     
-    server.sendContent(F("<tr><td>Acceleration RAW</td><td align=center>")) ;
-    server.sendContent(String(compass.a.x)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.a.y)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.a.z)) ; 
-    server.sendContent(F("</td><td align=center>(+/-32767)</td></tr>")) ;
+    message += F("<tr><td>Acceleration RAW</td><td align=center>") ;
+    message += String(compass.a.x) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.a.y) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.a.z) ; 
+    message += F("</td><td align=center>(+/-32767)</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Acceleration SI</td><td align=center>")) ;  //   +/- 2g  16Bit 2s complemet  -32767 - 0 - 32767 
-    server.sendContent(String(compass.a.x/16383.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.a.y/16383.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.a.z/16383.0,3)) ; 
-    server.sendContent(F("</td><td align=center>(g)</td></tr>")) ;
+    message += F("<tr><td>Acceleration SI</td><td align=center>") ;  //   +/- 2g  16Bit 2s complemet  -32767 - 0 - 32767 
+    message += String(compass.a.x/16383.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.a.y/16383.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.a.z/16383.0,3) ; 
+    message += F("</td><td align=center>(g)</td></tr>") ;
 
-    server.sendContent(F("<tr><td colspan=5>.</td></tr>")) ;
+    message += F("<tr><td colspan=5>.</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Magnetometer RAW</td><td align=center>")) ;
-    server.sendContent(String(xMag)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(yMag)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(zMag)) ; 
-    server.sendContent(F("</td><td align=center>(+/-32767)</td></tr>")) ;
+    message += F("<tr><td>Magnetometer RAW</td><td align=center>") ;
+    message += String(xMag) ; 
+    message += F("</td><td align=center>") ;
+    message += String(yMag) ; 
+    message += F("</td><td align=center>") ;
+    message += String(zMag) ; 
+    message += F("</td><td align=center>(+/-32767)</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Magnetometer SI</td><td align=center>")) ;
-    server.sendContent(String(xMag/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(yMag/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(zMag/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>(Gauss)</td></tr>")) ;
+    message += F("<tr><td>Magnetometer SI</td><td align=center>") ;
+    message += String(xMag/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(yMag/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(zMag/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>(Gauss)</td></tr>") ;
+
+    server.sendContent(message) ;
+    message = "" ;
     
-    server.sendContent(F("<tr><td>Running Min Value</td><td align=center>")) ;
-    server.sendContent(String(running_min.x/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(running_min.y/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(running_min.z/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>(Gauss)</td></tr>")) ;
+    message += F("<tr><td>Running Min Value</td><td align=center>") ;
+    message += String(running_min.x/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(running_min.y/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(running_min.z/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>(Gauss)</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Running Max Value</td><td align=center>")) ;
-    server.sendContent(String(running_max.x/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(running_max.y/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(running_max.z/32767.0*4.0,3)) ; 
-    server.sendContent(F("</td><td align=center>(Gauss)</td></tr>")) ;
+    message += F("<tr><td>Running Max Value</td><td align=center>") ;
+    message += String(running_max.x/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(running_max.y/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>") ;
+    message += String(running_max.z/32767.0*4.0,3) ; 
+    message += F("</td><td align=center>(Gauss)</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Current Cal Min</td><td align=center>")) ;
-    server.sendContent(String(compass.m_min.x)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.m_min.y)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.m_min.z)) ; 
-    server.sendContent(F("</td><td align=center>(+/-32767)</td></tr>")) ;
+    message += F("<tr><td>Current Cal Min</td><td align=center>") ;
+    message += String(compass.m_min.x) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.m_min.y) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.m_min.z) ; 
+    message += F("</td><td align=center>(+/-32767)</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Current Cal Max</td><td align=center>")) ;
-    server.sendContent(String(compass.m_max.x)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.m_max.y)) ; 
-    server.sendContent(F("</td><td align=center>")) ;
-    server.sendContent(String(compass.m_max.z)) ; 
-    server.sendContent(F("</td><td align=center>(+/-32767)</td></tr>")) ;
+    message += F("<tr><td>Current Cal Max</td><td align=center>") ;
+    message += String(compass.m_max.x) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.m_max.y) ; 
+    message += F("</td><td align=center>") ;
+    message += String(compass.m_max.z) ; 
+    message += F("</td><td align=center>(+/-32767)</td></tr>") ;
 
     if (bMagCal){
       MyColor =  F("STOP") ;
     }else{
       MyColor =  F("START") ;
     }
-    server.sendContent("<tr><td>.</td><td><form method=get action=" + server.uri() + "><input type='hidden' name='command' value='5'><input type='submit' value='RESET'></form></td>") ;
-    server.sendContent("<td><form method=get action=" + server.uri() + "><input type='hidden' name='command' value='4'><input type='submit' value='"+MyColor+"'></form></td>") ;
-    server.sendContent("<td><form method=get action=" + server.uri() + "><input type='hidden' name='command' value='3'><input type='submit' value='STORE'></form></td></tr>") ;
+    message += "<tr><td>.</td><td><form method=get action=" + server.uri() + "><input type='hidden' name='command' value='5'><input type='submit' value='RESET'></form></td>" ;
+    message += "<td><form method=get action=" + server.uri() + "><input type='hidden' name='command' value='4'><input type='submit' value='"+MyColor+"'></form></td>" ;
+    message += "<td><form method=get action=" + server.uri() + "><input type='hidden' name='command' value='3'><input type='submit' value='STORE'></form></td></tr>" ;
 
-    server.sendContent(F("<tr><td>Heading (Az)</td><td colspan=3 align=center>")) ;
-    server.sendContent(String(tv.heading,1)) ;     
-    server.sendContent(F("</td><td>(Deg)</td></tr>")) ;
+    message += F("<tr><td>Heading (Az)</td><td colspan=3 align=center>") ;
+    message += String(tv.heading,1) ;     
+    message += F("</td><td>(Deg)</td></tr>") ;
 
-    server.sendContent(F("</table><br>")) ;
-    
+    message += F("</table><br>") ;
+
+    server.sendContent(message) ;
+    message = "" ;    
   }
   
   if (String(server.uri()).indexOf("setup")>0) {  // setup of the node
     bDefault = false ;
-    server.sendContent("<table border=1 title='Node Settings'>");
-    server.sendContent(F("<tr><th>Parameter</th><th>Value</th><th></th></tr>"));
+    message += "<table border=1 title='Node Settings'>";
+    message += F("<tr><th>Parameter</th><th>Value</th><th></th></tr>");
   
     snprintf(buff, BUFF_MAX, "%04d/%02d/%02d %02d:%02d", year(AutoOff_t), month(AutoOff_t), day(AutoOff_t) , hour(AutoOff_t), minute(AutoOff_t));
     if (AutoOff_t > now()){
@@ -560,81 +565,85 @@ void handleRoot() {
     }else{
       MyColor =  "" ;
     }
-    server.sendContent(F("<tr><td>Time Zone</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='tzone' value='" + String(ghks.fTimeZone) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Time Zone</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='tzone' value='" + String(ghks.fTimeZone) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
   
-    server.sendContent(F("<tr><td>Local UDP Port NTP</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='lpntp' value='" + String(ghks.localPort) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Local UDP Port NTP</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='lpntp' value='" + String(ghks.localPort) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
   
-    server.sendContent(F("<tr><td>Local UDP Port Control</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='lpctr' value='" + String(ghks.localPortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Local UDP Port Control</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='lpctr' value='" + String(ghks.localPortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
   
-    server.sendContent(F("<tr><td>Remote UDP Port Control</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='rpctr' value='" + String(ghks.RemotePortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Remote UDP Port Control</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='rpctr' value='" + String(ghks.RemotePortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
     
-    server.sendContent(F("<tr><td>Network SSID</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='nssid' value='" + String(ghks.nssid) + "' maxlength="+String(sizeof(ghks.nssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
-    server.sendContent(F("<tr><td>Network Password</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='npass' value='" + String(ghks.npassword) + "' maxlength="+String(sizeof(ghks.npassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Network SSID</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='nssid' value='" + String(ghks.nssid) + "' maxlength="+String(sizeof(ghks.nssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
+    message += F("<tr><td>Network Password</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='npass' value='" + String(ghks.npassword) + "' maxlength="+String(sizeof(ghks.npassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-    server.sendContent(F("<tr><td>Config SSID</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='cssid' value='" + String(ghks.cssid) + "' maxlength="+String(sizeof(ghks.cssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
-    server.sendContent(F("<tr><td>Config Password</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='cpass' value='" + String(ghks.cpassword) + "' maxlength="+String(sizeof(ghks.cpassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Config SSID</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='cssid' value='" + String(ghks.cssid) + "' maxlength="+String(sizeof(ghks.cssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
+    message += F("<tr><td>Config Password</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='cpass' value='" + String(ghks.cpassword) + "' maxlength="+String(sizeof(ghks.cpassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-    server.sendContent(F("<tr><td>Time Server</td><td align=center>")) ; 
-    server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='timsv' value='" + String(ghks.timeServer) + "' maxlength=23 size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+    message += F("<tr><td>Time Server</td><td align=center>") ; 
+    message += "<form method=get action=" + server.uri() + "><input type='text' name='timsv' value='" + String(ghks.timeServer) + "' maxlength=23 size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-    server.sendContent("<tr><td>ESP ID</td><td align=center>0x" + String(ESP.getChipId(), HEX) + "</td><td align=center>"+String(ESP.getChipId())+"</td></tr>" ) ; 
+    message += "<tr><td>ESP ID</td><td align=center>0x" + String(ESP.getChipId(), HEX) + "</td><td align=center>"+String(ESP.getChipId())+"</td></tr>"  ; 
     WiFi.macAddress(mac);      
     snprintf(buff, BUFF_MAX, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    server.sendContent("<tr><td>MAC Address</td><td align=center>" + String(buff) + "</td><td align=center>.</td></tr>" ) ; 
-    server.sendContent("<tr><td>WiFi RSSI</td><td align=center>" + String(WiFi.RSSI()) + "</td><td>(dBm)</td></tr>" ) ; 
+    message += "<tr><td>MAC Address</td><td align=center>" + String(buff) + "</td><td align=center>.</td></tr>"  ; 
+    message += "<tr><td>WiFi RSSI</td><td align=center>" + String(WiFi.RSSI()) + "</td><td>(dBm)</td></tr>"  ; 
     ghks.MyIP =  WiFi.localIP() ;    
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);
-    server.sendContent("<tr><td>Node IP Address</td><td align=center>" + String(buff) + "</td><td>.</td></tr>" ) ; 
-    server.sendContent("<tr><td>Last Scan Speed</td><td align=center>" + String(lScanCtr) + "</td><td>(per second)</td></tr>" ) ;    
+    message += "<tr><td>Node IP Address</td><td align=center>" + String(buff) + "</td><td>.</td></tr>" ; 
+    message += "<tr><td>Last Scan Speed</td><td align=center>" + String(lScanCtr) + "</td><td>(per second)</td></tr>" ;    
     if( hasRTC ){
       rtc_status = DS3231_get_sreg();
       if (( rtc_status & 0x80 ) != 0 ){
-        server.sendContent(F("<tr><td>RTC Battery</td><td align=center bgcolor='red'>DEPLETED</td>"));
-        server.sendContent("<td><form method=get action=" + server.uri() + "><input type='hidden' name='rtcbf' value='1'><input type='submit' value='RESET'></form></td>");
-        server.sendContent(F("</tr>")) ;            
+        message += F("<tr><td>RTC Battery</td><td align=center bgcolor='red'>DEPLETED</td>");
+        message += "<td><form method=get action=" + server.uri() + "><input type='hidden' name='rtcbf' value='1'><input type='submit' value='RESET'></form></td>";
+        message += F("</tr>") ;            
       }else{
-        server.sendContent(F("<tr><td>RTC Battery</td><td align=center bgcolor='green'>-- OK --</td><td></td></tr>"));
+        message += F("<tr><td>RTC Battery</td><td align=center bgcolor='green'>-- OK --</td><td></td></tr>");
       }
-      server.sendContent("<tr><td>RTC Temperature</td><td align=center>"+String(rtc_temp,1)+"</td><td>(C)</td></tr>") ;                    
+      message +=  "<tr><td>RTC Temperature</td><td align=center>"+String(rtc_temp,1)+"</td><td>(C)</td></tr>" ;                    
     }
-    server.sendContent(F("</form></table>"));
+    message += F("</form></table>");
+    server.sendContent(message) ;
+    message = "" ;    
   }
   
   
-  if (bDefault) {     // default valve control and setup
-    server.sendContent(F("<b>Clocks</b><table border=1 title='Clocks'><tr><th>Clock Source</th><th>Time</th></tr>"));
+  if (bDefault) {     // default tracker control and setup
+    message += F("<b>Clocks</b><table border=1 title='Clocks'><tr><th>Clock Source</th><th>Time</th></tr>");
     if ( hasRTC ){
       DS3231_get(&tv.td);
-      server.sendContent(F("<tr><td>Dallas RTC</td><td align=right>")) ; 
+      message += F("<tr><td>Dallas RTC</td><td align=right>") ; 
       snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d<br>", tv.td.year, tv.td.mon, tv.td.mday , tv.td.hour, tv.td.min, tv.td.sec);
-      server.sendContent(String(buff)) ;
+      message += String(buff) ;
     }
-    server.sendContent(F("</td></tr><tr><td>Last NTP</td><td align=right>"));
+    message += F("</td></tr><tr><td>Last NTP</td><td align=right>");
     snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d<br>", tv.tn.year, tv.tn.mon, tv.tn.mday , tv.tn.hour, tv.tn.min, tv.tn.sec);
-    server.sendContent(String(buff)) ; 
-    server.sendContent(F("</td></tr><tr><td>Last Reboot (ish)</td><td align=right>"));
+    message += String(buff) ; 
+    message += F("</td></tr><tr><td>Last Reboot (ish)</td><td align=right>");
     snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d<br>", tv.tb.year, tv.tb.mon, tv.tb.mday , tv.tb.hour, tv.tb.min, tv.tb.sec);
-    server.sendContent(String(buff)) ; 
+    message += String(buff) ; 
     if ( tv.iUseGPS != 0 ){
-      server.sendContent(F("</td></tr><tr><td>Last GPS</td><td align=right>"));
+      message += F("</td></tr><tr><td>Last GPS</td><td align=right>");
       snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d<br>", tv.tg.year, tv.tg.mon, tv.tg.mday , tv.tg.hour, tv.tg.min, tv.tg.sec);
-      server.sendContent(String(buff)) ;
+      message += String(buff) ;
     } 
-    server.sendContent(F("</td></tr><tr><td>Last Calculations</td><td align=right>"));
+    message += F("</td></tr><tr><td>Last Calculations</td><td align=right>");
     snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d<br>", tv.tc.year, tv.tc.mon, tv.tc.mday , tv.tc.hour, tv.tc.min, tv.tc.sec);
-    server.sendContent(String(buff)) ; 
-    server.sendContent(F("</td></tr><tr><td><b>Arduino Time</b></td><td align=right><b>"));
+    message += String(buff) ; 
+    message += F("</td></tr><tr><td><b>Arduino Time</b></td><td align=right><b>");
     snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
-    server.sendContent(String(buff)) ; 
-    server.sendContent(F("</td></tr></table>"));
+    message += String(buff) ; 
+    message += F("</td></tr></table>");
+    server.sendContent(message) ;
+    message = "" ;    
 
     MyCheck = "" ;
     if ( iPWM_YZ != 0 ) {
@@ -652,405 +661,470 @@ void handleRoot() {
       }
     } 
   
-    server.sendContent(F("<br><b>Tracker Control System</b><table border=1 title='Tracker Control'><tr><th> Parameter</th><th>Value</th><th><b>"));
-    server.sendContent( MyCheck + "</th></tr>") ; 
+    message += F("<br><b>Tracker Control System</b><table border=1 title='Tracker Control'><tr><th> Parameter</th><th>Value</th><th><b>");
+    message +=  MyCheck + "</th></tr>" ; 
 
-    server.sendContent(F("<form method=get action=/><tr><td>Tracking Mode</td><td align=center><select name='tmode'>")) ; 
+    message += F("<form method=get action=/><tr><td>Tracking Mode</td><td align=center><select name='tmode'>") ; 
     for (i = -1 ; i < 6 ; i++ ){
-      server.sendContent(F("<option value='")); 
-      server.sendContent(String(i)) ;
+      message += F("<option value='"); 
+      message += String(i) ;
       if ( tv.iTrackMode == i ){
-         server.sendContent(F("' SELECTED>"));
+         message += F("' SELECTED>");
       }else{
-         server.sendContent(F("'>"));                    
+         message += F("'>");                    
       }
-      server.sendContent(String(i) + " ") ;
+      message += String(i) + " " ;
       switch (i){
         case -1:
-           server.sendContent(F("Track Both Park Both"));          
+           message += F("Track Both Park Both");          
         break;
         case 0:
-           server.sendContent(F("Track Both Park Only E/W"));          
+           message += F("Track Both Park Only E/W");          
         break;
         case 1:
-           server.sendContent(F("Track and Park E/W Only"));          
+           message += F("Track and Park E/W Only");          
         break;
         case 2:
-           server.sendContent(F("Track and Park N/S Only"));          
+           message += F("Track and Park N/S Only");          
         break;
         case 3:
-           server.sendContent(F("Dont Track Dont Park"));          
+           message += F("Dont Track Stay on Target");          
         break;
         case 4:
-           server.sendContent(F("Dont Track Park Both"));          
+           message += F("Dont Track Park Both");          
         break;
         case 5:
-           server.sendContent(F("ALL STOP - Motors Off"));          
+           message += F("ALL STOP - Motors Off");          
+        break;
+        case 6:
+           message += F("Dont Track Wind Park Both");          
         break;
       }
     }
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>") ; 
     
-    server.sendContent(F("<form method=get action=/><tr><td>Time Zone</td><td align=center><input type='text' name='tzone' value='")) ; 
-    server.sendContent(String(ghks.fTimeZone)) ;
-    server.sendContent(F("' size=6 maxlength=2></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>Time Zone</td><td align=center><input type='text' name='tzone' value='") ; 
+    message += String(ghks.fTimeZone) ;
+    message += F("' size=6 maxlength=2></td><td><input type='submit' value='SET'></td></tr></form>") ; 
     
-    server.sendContent(F("<form method=get action=/><tr><td>Latitude +N -S</td><td align=center><input type='text' name='mylat' value='")) ; 
-    server.sendContent(String(tv.latitude,8));
-    server.sendContent(F("' size=12></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>Latitude +N -S</td><td align=center><input type='text' name='mylat' value='") ; 
+    message += String(tv.latitude,8);
+    message += F("' size=12></td><td><input type='submit' value='SET'></td></tr></form>") ; 
 
-    server.sendContent(F("<form method=get action=/><tr><td>Longitude</td><td align=center><input type='text' name='mylon' value='")) ; 
-    server.sendContent(String(tv.longitude,8));
-    server.sendContent(F("' size=12></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>Longitude</td><td align=center><input type='text' name='mylon' value='") ; 
+    message += String(tv.longitude,8);
+    message += F("' size=12></td><td><input type='submit' value='SET'></td></tr></form>") ; 
 
-    server.sendContent(F("<form method=get action=/><tr><td>X (N/S) Axis Multiplier</td><td align=center><input type='text' name='mulax' value='")) ; 
-    server.sendContent(String(tv.xMul,2));
-    server.sendContent(F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>X (N/S) Axis Multiplier</td><td align=center><input type='text' name='mulax' value='") ; 
+    message += String(tv.xMul,2);
+    message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>") ; 
 
-    server.sendContent(F("<form method=get action=/><tr><td>Y (E/W) Axis Multiplier</td><td align=center><input type='text' name='mulay' value='")) ; 
-    server.sendContent(String(tv.yMul,2)) ;
-    server.sendContent(F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>Y (E/W) Axis Multiplier</td><td align=center><input type='text' name='mulay' value='") ; 
+    message += String(tv.yMul,2) ;
+    message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>") ; 
 
-    server.sendContent(F("<form method=get action=/><tr><td>Z (Vert) Axis Multiplier</td><td align=center><input type='text' name='mulaz' value='")) ; 
-    server.sendContent(String(tv.zMul,2));
-    server.sendContent(F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>Z (Vert) Axis Multiplier</td><td align=center><input type='text' name='mulaz' value='") ; 
+    message += String(tv.zMul,2);
+    message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>") ; 
 
-    server.sendContent(F("<form method=get action=/><tr><td>X<->Y Axis Swap</td><td align=center>")) ; 
-    server.sendContent(F("<select name='xyswp'>")) ;
+    message += F("<form method=get action=/><tr><td>X<->Y Axis Swap</td><td align=center>") ; 
+    message += F("<select name='xyswp'>") ;
     if (tv.iXYS == 0 ){
-      server.sendContent(F("<option value='0' SELECTED>0 Normal")); 
-      server.sendContent(F("<option value='1'>1 Swapped")); 
+      message += F("<option value='0' SELECTED>0 Normal"); 
+      message += F("<option value='1'>1 Swapped"); 
     }else{
-      server.sendContent(F("<option value='0'>0 Normal")); 
-      server.sendContent(F("<option value='1' SELECTED>1 Swapped")); 
+      message += F("<option value='0'>0 Normal"); 
+      message += F("<option value='1' SELECTED>1 Swapped"); 
     }
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-    server.sendContent(F("<form method=get action=/><tr><td>Night Shutdown</td><td align=center>")) ; 
-    server.sendContent(F("<select name='nisht'>"));
+    message += F("<form method=get action=/><tr><td>Night Shutdown</td><td align=center>"); 
+    message += F("<select name='nisht'>");
     if (tv.iNightShutdown == 0 ){
-      server.sendContent(F("<option value='0' SELECTED>0 Shutdown at Night")); 
-      server.sendContent(F("<option value='1'>1 Always Active")); 
+      message += F("<option value='0' SELECTED>0 Shutdown at Night"); 
+      message += F("<option value='1'>1 Always Active"); 
     }else{
-      server.sendContent(F("<option value='0'>0 Shutdown at Night")); 
-      server.sendContent(F("<option value='1' SELECTED>1 Always Active")); 
+      message += F("<option value='0'>0 Shutdown at Night"); 
+      message += F("<option value='1' SELECTED>1 Always Active"); 
     }
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-    server.sendContent(F("<form method=get action=/><tr><td>Multi Drive</td><td align=center>")) ; 
-    server.sendContent(F("<select name='mltdr'>"));
+    message += F("<form method=get action=/><tr><td>Multi Drive</td><td align=center>") ; 
+    message += F("<select name='mltdr'>");
     if (tv.iMultiDrive == 0 ){
-      server.sendContent(F("<option value='0' SELECTED>0 One Axis at a Time")); 
-      server.sendContent(F("<option value='1'>1 Both axis active at once")); 
+      message += F("<option value='0' SELECTED>0 One Axis at a Time"); 
+      message += F("<option value='1'>1 Both axis active at once"); 
     }else{
-      server.sendContent(F("<option value='0'>0 One Axis at a Time")); 
-      server.sendContent(F("<option value='1' SELECTED>1 Both axis active at once")); 
+      message += F("<option value='0'>0 One Axis at a Time"); 
+      message += F("<option value='1' SELECTED>1 Both axis active at once"); 
     }
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
 
-    server.sendContent(F("<form method=get action=/><tr><td>Motor Drive Electrics</td><td align=center>")) ; 
-    server.sendContent(F("<select name='outpt'>"));
+    message += F("<form method=get action=/><tr><td>Motor Drive Electrics</td><td align=center>") ; 
+    message += F("<select name='outpt'>");
     switch (tv.iOutputType){
       case 0:     
-        server.sendContent(F("<option value='0' SELECTED>0 STANDARD PWM / DIR ")); 
-        server.sendContent(F("<option value='1'>1 L298 IN1 IN2")); 
-        server.sendContent(F("<option value='2'>2 RELAY FWD / REV Active Low")); 
-        server.sendContent(F("<option value='3'>3 RELAY FWD / REV Active High")); 
+        message += F("<option value='0' SELECTED>0 STANDARD PWM / DIR "); 
+        message += F("<option value='1'>1 L298 IN1 IN2"); 
+        message += F("<option value='2'>2 RELAY FWD / REV Active Low"); 
+        message += F("<option value='3'>3 RELAY FWD / REV Active High"); 
       break;
       case 1:     
-        server.sendContent(F("<option value='0'>0 STANDARD PWM / DIR ")); 
-        server.sendContent(F("<option value='1' SELECTED>1 L298 IN1 IN2")); 
-        server.sendContent(F("<option value='2'>2 RELAY FWD / REV Active Low")); 
-        server.sendContent(F("<option value='3'>3 RELAY FWD / REV Active High")); 
+        message += F("<option value='0'>0 STANDARD PWM / DIR "); 
+        message += F("<option value='1' SELECTED>1 L298 IN1 IN2"); 
+        message += F("<option value='2'>2 RELAY FWD / REV Active Low"); 
+        message += F("<option value='3'>3 RELAY FWD / REV Active High"); 
       break;
       case 2:     
-        server.sendContent(F("<option value='0'>0 STANDARD PWM / DIR ")); 
-        server.sendContent(F("<option value='1'>1 L298 IN1 IN2")); 
-        server.sendContent(F("<option value='2' SELECTED>2 RELAY FWD / REV Active Low")); 
-        server.sendContent(F("<option value='3'>3 RELAY FWD / REV Active High")); 
+        message += F("<option value='0'>0 STANDARD PWM / DIR "); 
+        message += F("<option value='1'>1 L298 IN1 IN2"); 
+        message += F("<option value='2' SELECTED>2 RELAY FWD / REV Active Low"); 
+        message += F("<option value='3'>3 RELAY FWD / REV Active High"); 
       break;
       case 3:     
-        server.sendContent(F("<option value='0'>0 STANDARD PWM / DIR ")); 
-        server.sendContent(F("<option value='1'>1 L298 IN1 IN2")); 
-        server.sendContent(F("<option value='2'>2 RELAY FWD / REV Active Low")); 
-        server.sendContent(F("<option value='3' SELECTED>3 RELAY FWD / REV Active High")); 
+        message += F("<option value='0'>0 STANDARD PWM / DIR "); 
+        message += F("<option value='1'>1 L298 IN1 IN2"); 
+        message += F("<option value='2'>2 RELAY FWD / REV Active Low"); 
+        message += F("<option value='3' SELECTED>3 RELAY FWD / REV Active High"); 
       break;
     }  
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-    server.sendContent(F("<form method=get action=/><tr><td>Tracker Name</td><td align=center><input type='text' name='tname' value='"));
-    server.sendContent(String(tv.trackername)) ; 
-    server.sendContent(F("' size=16 maxlength=16><input type='hidden' name='dummy' value='0'></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("<form method=get action=/><tr><td>Tracker Name</td><td align=center><input type='text' name='tname' value='");
+    message += String(tv.trackername) ; 
+    message += F("' size=16 maxlength=16><input type='hidden' name='dummy' value='0'></td><td><input type='submit' value='SET'></td></tr></form>");
 
-
-    server.sendContent(F("<form method=get action=/><tr><td>Hardware GPS</td><td align=center>")) ; 
-    server.sendContent(F("<select name='iugps'>"));
+    server.sendContent(message) ;
+    message = "" ;  
+    
+    message += F("<form method=get action=/><tr><td>Hardware GPS</td><td align=center>") ; 
+    message += F("<select name='iugps'>");
     switch (tv.iUseGPS){
       case 1:
-        server.sendContent(F("<option value='0'>0 No GPS")); 
-        server.sendContent(F("<option value='1' SELECTED>1 Use GPS")); 
-        server.sendContent(F("<option value='2'>2 Use Networked GPS")); 
+        message += F("<option value='0'>0 No GPS"); 
+        message += F("<option value='1' SELECTED>1 Use GPS"); 
+        message += F("<option value='2'>2 Use Networked GPS"); 
       break;
       case 2:
-        server.sendContent(F("<option value='0'>0 No GPS")); 
-        server.sendContent(F("<option value='1'>1 Use GPS")); 
-        server.sendContent(F("<option value='2' SELECTED>2 Use Networked GPS")); 
+        message += F("<option value='0'>0 No GPS"); 
+        message += F("<option value='1'>1 Use GPS"); 
+        message += F("<option value='2' SELECTED>2 Use Networked GPS"); 
       break;
       default:  // 0 as well
-        server.sendContent(F("<option value='0' SELECTED>0 No GPS")); 
-        server.sendContent(F("<option value='1'>1 Use GPS")); 
-        server.sendContent(F("<option value='2'>2 Use Networked GPS")); 
+        message += F("<option value='0' SELECTED>0 No GPS"); 
+        message += F("<option value='1'>1 Use GPS"); 
+        message += F("<option value='2'>2 Use Networked GPS"); 
       break;
     }  
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-    server.sendContent(F("<form method=get action=/><tr><td>Mount Type</td><td align=center>")) ; 
-    server.sendContent(F("<select name='mount'>"));
+    message += F("<form method=get action=/><tr><td>Mount Type</td><td align=center>") ; 
+    message += F("<select name='mount'>");
     if (tv.iMountType == 0 ){
-      server.sendContent(F("<option value='0' SELECTED>0 Equatorial")); 
-      server.sendContent(F("<option value='1'>1 Alt/Az")); 
+      message += F("<option value='0' SELECTED>0 Equatorial"); 
+      message += F("<option value='1'>1 Alt/Az"); 
     }else{
-      server.sendContent(F("<option value='0'>0 Equatorial")); 
-      server.sendContent(F("<option value='1' SELECTED>1 Alt/Az")); 
+      message += F("<option value='0'>0 Equatorial"); 
+      message += F("<option value='1' SELECTED>1 Alt/Az"); 
     }
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-
-    server.sendContent(F("<form method=get action=/><tr><td>Auto Time Updates</td><td align=center>")) ; 
-    server.sendContent(F("<select name='tmsrc'>"));
-    if (tv.iTimeSource == 0 ){
-      server.sendContent(F("<option value='0' SELECTED>0 Update From RTC every Hour")); 
-      server.sendContent(F("<option value='1'>1 Update from NTP Every 24 Hrs")); 
-    }else{
-      server.sendContent(F("<option value='0'>0 Update From RTC every Hour")); 
-      server.sendContent(F("<option value='1' SELECTED>1 Update from NTP Every 24 Hrs")); 
+    message += F("<form method=get action=/><tr><td>Auto Time Updates</td><td align=center>") ; 
+    message += F("<select name='tmsrc'>");
+    switch (tv.iTimeSource ){
+      case 0:
+        message += F("<option value='0' SELECTED>0 Update From RTC every Hour"); 
+        message += F("<option value='1'>1 Update from NTP Every 24 Hrs"); 
+        message += F("<option value='2'>2 Update from Other Trackers"); 
+      break;
+      case 1:
+        message += F("<option value='0'>0 Update From RTC every Hour"); 
+        message += F("<option value='1' SELECTED>1 Update from NTP Every 24 Hrs"); 
+        message += F("<option value='2'>2 Update from Other Trackers"); 
+      break;
+      case 2:
+        message += F("<option value='0'>0 Update From RTC every Hour"); 
+        message += F("<option value='1'>1 Update from NTP Every 24 Hrs"); 
+        message += F("<option value='2' SELECTED>2 Update from Other Trackers"); 
+      break;
     }
-    server.sendContent(F("</select></td><td><input type='submit' value='SET'></td></tr></form>"));
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
+    message += F("<form method=get action=/><tr><td>Wind Speed Source</td><td align=center>") ; 
+    message += F("<select name='spdsrc'>");
+    switch (tv.iMountType == 0 ){
+      case 0:
+        message += F("<option value='0' SELECTED>0 ADC - A0"); 
+        message += F("<option value='1'>1 Other Trackers"); 
+        message += F("<option value='2'>2 Open Weather"); 
+      break;
+      case 1:
+        message += F("<option value='0'>0 ADC - A0"); 
+        message += F("<option value='1' SELECTED>1 Other Trackers"); 
+        message += F("<option value='2'>2 Open Weather"); 
+      break;
+      case 2:
+        message += F("<option value='0'>0 ADC - A0"); 
+        message += F("<option value='1'>1 Other Trackers"); 
+        message += F("<option value='2' SELECTED>2 Open Weather"); 
+      break;
+    }
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-    server.sendContent(F("<form method=get action=/><tr><td>Max Wind Speed</td><td align=center><input type='text' name='winds' value='")) ; 
-    server.sendContent(String(tv.iMaxWindSpeed));
-    server.sendContent(F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
+    message += F("<form method=get action=/><tr><td>Temp Source</td><td align=center>") ; 
+    message += F("<select name='tempsrc'>");
+    switch (tv.iMountType == 0 ){
+      case 0:
+        message += F("<option value='0' SELECTED> RTC Sensor"); 
+        message += F("<option value='1'>1 PT Sensor"); 
+        message += F("<option value='2'>2 Open Weather"); 
+      break;
+      case 1:
+        message += F("<option value='0'> RTC Sensor"); 
+        message += F("<option value='1' SELECTED>1 PT Sensor"); 
+        message += F("<option value='2'>2 Open Weather"); 
+      break;
+      case 2:
+        message += F("<option value='0'> RTC Sensor"); 
+        message += F("<option value='1'>1 PT Sensor"); 
+        message += F("<option value='2' SELECTED>2 Open Weather"); 
+      break;
+    }
+    message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>");
 
-    server.sendContent(F("<form method=get action=/><tr><td>Time above speed to park</td><td align=center><input type='text' name='windt' value='")) ; 
-    server.sendContent(String(tv.iMaxWindTime));
-    server.sendContent(F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
-    server.sendContent(F("<form method=get action=/><tr><td>Time to resume tracking</td><td align=center><input type='text' name='windl' value='")) ; 
-    server.sendContent(String(tv.iMinWindTime));
-    server.sendContent(F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>")) ; 
-/*
-    server.sendContent(F("<tr><td>WiFi RSSI</td><td align=center>"));
-    server.sendContent(String(WiFi.RSSI())) ; 
-    server.sendContent(F("</td><td>(dBm)</td></tr>"));
-*/    
+    message += F("<form method=get action=/><tr><td>Max Wind Speed</td><td align=center><input type='text' name='winds' value='") ; 
+    message += String(tv.iMaxWindSpeed);
+    message += "' size=5>("+String(ghks.ADC_Unit)+")</td><td><input type='submit' value='SET'></td></tr></form>" ; 
 
-    server.sendContent(F("<tr><td>Solar Declination</td><td align=center>"));
-    server.sendContent(String(decl,3)) ; 
-    server.sendContent(F("</td><td>(Deg)</td></tr>"));
+    message += F("<form method=get action=/><tr><td>Time above speed to park</td><td align=center><input type='text' name='windt' value='") ; 
+    message += String(tv.iMaxWindTime);
+    message += F("' size=5>(seconds)</td><td><input type='submit' value='SET'></td></tr></form>") ; 
+    message += F("<form method=get action=/><tr><td>Time to resume tracking</td><td align=center><input type='text' name='windl' value='") ; 
+    message += String(tv.iMinWindTime);
+    message += F("' size=5>(seconds)</td><td><input type='submit' value='SET'></td></tr></form>") ; 
+    server.sendContent(message) ;
+    message = "" ;  
+    
+    message += F("<tr><td>Solar Declination</td><td align=center>");
+    message += String(decl,3) ; 
+    message += F("</td><td>(Deg)</td></tr>");
 
-    server.sendContent(F("<tr><td>Equation of Time</td><td align=center>"));
-    server.sendContent(String(eqtime,3)) ; 
-    server.sendContent(F("</td><td>(min)</td></tr>"));
+    message += F("<tr><td>Equation of Time</td><td align=center>");
+    message += String(eqtime,3) ; 
+    message += F("</td><td>(min)</td></tr>");
 
-    server.sendContent(F("<tr><td>Sunrise - State - Sunset</td><td align=center>"));
+    message += F("<tr><td>Sunrise - State - Sunset</td><td align=center>");
     snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(tv.sunrise), MinSolarTime(tv.sunrise));
-    server.sendContent(String(buff)) ; 
+    message += String(buff) ; 
     if ( tv.iDayNight == 1 ){
-      server.sendContent(F(" - DAY - "));
+      message += F(" - DAY - ");
     }else{
-      server.sendContent(F(" - NIGHT - "));          
+      message += F(" - NIGHT - ");          
     }
     snprintf(buff, BUFF_MAX, "%02d:%02d", HrsSolarTime(tv.sunset), MinSolarTime(tv.sunset));        
-    server.sendContent(String(buff)) ; 
-    server.sendContent(F("</td><td>(hh:mm)</td></tr>"));
+    message += String(buff) ; 
+    message += F("</td><td>(hh:mm)</td></tr>");
         
     if ( tv.iUseGPS != 0 ){
-      server.sendContent(F("<tr><td>GPS lock age</td><td align=center>"));
+      message += F("<tr><td>GPS lock age</td><td align=center>");
       if ( tv.fixage < 10000 ) {
-        server.sendContent(String(tv.fixage)) ; 
+        message += String(tv.fixage) ; 
       }else{
-        server.sendContent(F("-- No Lock --")) ;           
+        message += F("-- No Lock --") ;           
       }
-      server.sendContent(F("</td><td>(ms)</td></tr>"));
+      message += F("</td><td>(ms)</td></tr>");
       
-      server.sendContent(F("<tr><td>GPS Satellites</td><td align=center>"));
+      message += F("<tr><td>GPS Satellites</td><td align=center>");
       if ( gps.satellites() == 255 ){
-        server.sendContent(F("-- No Lock --")) ; 
+        message += F("-- No Lock --") ; 
       }else{
-        server.sendContent(String(gps.satellites())) ;           
+        message += String(gps.satellites()) ;           
       }
-      server.sendContent(F("</td></tr>")) ;
+      message += F("</td></tr>") ;
       
-      server.sendContent(F("<tr><td>GPS Chars</td><td align=center>")) ;
-      server.sendContent(String(gpschars)) ; 
-      server.sendContent(F("</td></tr>")) ;
+      message += F("<tr><td>GPS Chars</td><td align=center>") ;
+      message += String(gpschars) ; 
+      message += F("</td></tr>") ;
     }
     if( hasRTC ){
       rtc_status = DS3231_get_sreg();
       if (( rtc_status & 0x80 ) != 0 ){
-        server.sendContent(F("<tr><td>RTC Battery</td><td align=center bgcolor='red'>DEPLETED</td>"));
-        server.sendContent("<td><form method=get action=" + server.uri() + "><input type='hidden' name='rtcbf' value='1'><input type='submit' value='RESET'></form></td>");
-        server.sendContent(F("</tr>")) ;            
+        message += F("<tr><td>RTC Battery</td><td align=center bgcolor='red'>DEPLETED</td>");
+        message += "<td><form method=get action=" + server.uri() + "><input type='hidden' name='rtcbf' value='1'><input type='submit' value='RESET'></form></td>";
+        message += F("</tr>") ;            
       }else{
-        server.sendContent(F("<tr><td>RTC Battery</td><td align=center bgcolor='green'>-- OK --</td><td></td></tr>")) ;                    
+        message += F("<tr><td>RTC Battery</td><td align=center bgcolor='green'>-- OK --</td><td></td></tr>") ;                    
       }
-      server.sendContent("<tr><td>RTC Temperature</td><td align=center>"+String(rtc_temp,1)+"</td><td>(C)</td></tr>") ;                    
+      message += "<tr><td>RTC Temperature</td><td align=center>"+String(rtc_temp,1)+"</td><td>(C)</td></tr>" ;                    
     }
     
     
-    server.sendContent(F("<tr><td>P/T temp</td><td align=center>")) ;
-    server.sendContent(String(tv.gT,1)) ; 
-    server.sendContent(F("</td><td>(C)</td></tr>")) ;
+    message += F("<tr><td>P/T temp</td><td align=center>") ;
+    message += String(tv.gT,1) ; 
+    message += F("</td><td>(C)</td></tr>") ;
 
-    server.sendContent(F("<tr><td>Pressue</td><td align=center>"));
-    server.sendContent(String(tv.Pr)) ; 
-    server.sendContent(F("</td><td>(mBar)</td></tr>")) ;
+    message += F("<tr><td>Pressue</td><td align=center>");
+    message += String(tv.Pr) ; 
+    message += F("</td><td>(mBar)</td></tr>") ;
     
-    server.sendContent(F("<tr><td>Heading (Az)</td><td align=center>")) ;
-    server.sendContent(String(tv.heading,1)) ;     
-    server.sendContent(F("</td><td>(Deg)</td></tr>")) ;
+    message += F("<tr><td>Heading (Az)</td><td align=center>") ;
+    message += String(tv.heading,1) ;     
+    message += F("</td><td>(Deg)</td></tr>") ;
 
     snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
-    server.sendContent("<tr><td>Computer Uptime</td><td align=center>"+String(buff)+"</td><td>(day:hr:min)</td></tr>" ) ;
+    message += "<tr><td>Computer Uptime</td><td align=center>"+String(buff)+"</td><td>(day:hr:min)</td></tr>" ;
 
-    server.sendContent(F("</table><br>")) ;
+    message += F("</table><br>") ;
+    server.sendContent(message) ;
+    message = "" ;  
     
-    server.sendContent(F("<table border=1 title='Solar Tracker Status'>")) ;
+    message += F("<table border=1 title='Solar Tracker Status'>") ;
     if (tv.iMountType == 0 ){
-      server.sendContent(F("<tr><th>Parameter</th><th>(Y) E/W Value</th><th>.</th><th>(X) N/S Value</th><th>.</th></tr>"));
+      message += F("<tr><th>Parameter</th><th>(Y) E/W Value</th><th>.</th><th>(X) N/S Value</th><th>.</th></tr>");
     }else{
-      server.sendContent(F("<tr><th>Parameter</th><th>(Y) Az Value</th><th>.</th><th>(X) Alt Value</th><th>.</th></tr>"));          
+      message += F("<tr><th>Parameter</th><th>(Y) Az Value</th><th>.</th><th>(X) Alt Value</th><th>.</th></tr>");          
     }
     if (( tv.yMinVal == tv.yzTarget )||( tv.xMinVal == tv.xzTarget )){
       MyColor = String("bgcolor='orange'");   
     }else{
       MyColor = String("");
     }
-    server.sendContent(F("<tr><td>Min Angle</td><td><form method=get action=/><input type='text' name='minay' value='")); 
-    server.sendContent(String(tv.yMinVal));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='minax' value='"));
-    server.sendContent(String(tv.xMinVal)); 
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")); 
+    message += F("<tr><td>Min Angle</td><td><form method=get action=/><input type='text' name='minay' value='"); 
+    message += String(tv.yMinVal);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='minax' value='");
+    message += String(tv.xMinVal); 
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>"); 
     
     if (( tv.yMaxVal == tv.yzTarget )||( tv.xMaxVal == tv.xzTarget )){ // indicat if on the stops
       MyColor = String("bgcolor='orange'");   
     }else{
       MyColor = String("");
     }
-    server.sendContent(F("<tr><td>Max Angle</td><td><form method=get action=/><input type='text' name='maxay' value='"));
-    server.sendContent(String(tv.yMaxVal));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='maxax' value='"));
-    server.sendContent(String(tv.xMaxVal));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")); 
+    message += F("<tr><td>Max Angle</td><td><form method=get action=/><input type='text' name='maxay' value='");
+    message += String(tv.yMaxVal);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='maxax' value='");
+    message += String(tv.xMaxVal);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>"); 
 
     if ( tv.iDayNight == 0 ){  // indicate this is the target source
       MyColor = String("bgcolor='yellow'");   
     }else{
       MyColor = String("");   
     }
-    server.sendContent("<tr " + MyColor + "><td>Night Park Angle</td><td><form method=get action=/><input type='text' name='paray' value='") ;
-    server.sendContent(String(tv.dyPark)) ;
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='parax' value='")) ;
-    server.sendContent(String(tv.dxPark));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")) ; 
+    message += "<tr " + MyColor + "><td>Night Park Angle</td><td><form method=get action=/><input type='text' name='paray' value='" ;
+    message += String(tv.dyPark) ;
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='parax' value='") ;
+    message += String(tv.dxPark);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>") ; 
     
-    server.sendContent(F("<tr><td>Wind Park Angle</td><td><form method=get action=/><input type='text' name='parwy' value='")) ;
-    server.sendContent(String(tv.dyParkWind)) ;
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='parwx' value='")) ;
-    server.sendContent(String(tv.dxParkWind));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")) ; 
+    message += F("<tr><td>Wind Park Angle</td><td><form method=get action=/><input type='text' name='parwy' value='") ;
+    message += String(tv.dyParkWind) ;
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='parwx' value='") ;
+    message += String(tv.dxParkWind);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>") ; 
     
-    server.sendContent(F("<tr><td>Offest Angle</td><td><form method=get action=/><input type='text' name='offay' value='")) ;
-    server.sendContent(String(tv.yzOffset));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='offax' value='")) ;
-    server.sendContent(String(tv.xzOffset));
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")) ; 
+    message += F("<tr><td>Offest Angle</td><td><form method=get action=/><input type='text' name='offay' value='") ;
+    message += String(tv.yzOffset);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='offax' value='") ;
+    message += String(tv.xzOffset);
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>") ; 
     
-    server.sendContent(F("<tr><td>Hysteris Angle</td><td><form method=get action=/><input type='text' name='hysay' value='")) ;
-    server.sendContent(String(tv.yzH)) ;
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='hysax' value='")) ;
-    server.sendContent(String(tv.xzH)) ;
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")) ; 
+    message += F("<tr><td>Hysteris Angle</td><td><form method=get action=/><input type='text' name='hysay' value='") ;
+    message += String(tv.yzH) ;
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='hysax' value='") ;
+    message += String(tv.xzH) ;
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>") ; 
 
-    server.sendContent(F("<tr><td>Max Motor Speed</td><td><form method=get action=/><input type='text' name='mmspy' value='")) ;
-    server.sendContent(String(tv.yMaxMotorSpeed)) ;
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='mmspx' value='")) ;
-    server.sendContent(String(tv.xMaxMotorSpeed)) ;
-    server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")) ; 
+    message += F("<tr><td>Max Motor Speed</td><td><form method=get action=/><input type='text' name='mmspy' value='") ;
+    message += String(tv.yMaxMotorSpeed) ;
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='mmspx' value='") ;
+    message += String(tv.xMaxMotorSpeed) ;
+    message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>") ; 
 
     if ( tv.iTrackMode == 3 ){
       MyColor = String("bgcolor='yellow'");   
-      server.sendContent("<tr " + MyColor + "><td>Target Angle</td><td><form method=get action=/><input type='text' name='taray' value='");
-      server.sendContent(String(tv.yzTarget));
-      server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='tarax' value='"));
-      server.sendContent(String(tv.xzTarget));
-      server.sendContent(F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>")) ; 
+      message += "<tr " + MyColor + "><td>Target Angle</td><td><form method=get action=/><input type='text' name='taray' value='";
+      message += String(tv.yzTarget);
+      message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='tarax' value='");
+      message += String(tv.xzTarget);
+      message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>") ; 
     }else{
-      server.sendContent(F("<tr><td>Target Angle</td><td><b>"));
-      server.sendContent(String(tv.yzTarget));
-      server.sendContent(F("</td><td>(Deg)</td><td><b>")) ;
-      server.sendContent(String(tv.xzTarget));
-      server.sendContent(F("</td><td>(Deg)</td></tr>")) ;         
+      message += F("<tr><td>Target Angle</td><td><b>");
+      message += String(tv.yzTarget);
+      message += F("</td><td>(Deg)</td><td><b>") ;
+      message += String(tv.xzTarget);
+      message += F("</td><td>(Deg)</td></tr>") ;         
     }
     
-    server.sendContent(F("<tr><td>Current Sensor Angle</td><td>")) ;
-    server.sendContent(String(tv.yzAng)) ;
-    server.sendContent(F("</td><td>(Deg)</td><td>")) ;
-    server.sendContent(String(tv.xzAng));
-    server.sendContent(F("</td><td>(Deg)</td></tr>")) ; 
+    message += F("<tr><td>Current Sensor Angle</td><td>") ;
+    message += String(tv.yzAng) ;
+    message += F("</td><td>(Deg)</td><td>") ;
+    message += String(tv.xzAng);
+    message += F("</td><td>(Deg)</td></tr>") ; 
 
-    server.sendContent(F("<tr><td>Target minus Current</td><td>")) ;
-    server.sendContent(String(tv.yzTarget-tv.yzAng)) ;
-    server.sendContent(F("</td><td>(Deg)</td><td>")) ;
-    server.sendContent(String(tv.xzTarget-tv.xzAng));
-    server.sendContent(F("</td><td>(Deg)</td></tr>")) ; 
+    message += F("<tr><td>Target minus Current</td><td>") ;
+    message += String(tv.yzTarget-tv.yzAng) ;
+    message += F("</td><td>(Deg)</td><td>") ;
+    message += String(tv.xzTarget-tv.xzAng);
+    message += F("</td><td>(Deg)</td></tr>") ; 
   
     if ((tv.iMountType == 1 ) && ( tv.iDayNight == 1 )&& ( tv.iTrackMode != 3 )){  // day and mount type
       MyColor = String("bgcolor='yellow'");   
     }else{
       MyColor = String("");   
     }
-    server.sendContent("<tr " + MyColor + "><td>Azomouth / Elevation</td><td>");
-    server.sendContent(String(tv.solar_az_deg)) ; 
-    server.sendContent(F("</td><td>(Deg)</td><td>"));
-    server.sendContent(String(tv.solar_el_deg)) ; 
-    server.sendContent(F("</td><td>(Deg)</td></tr>"));
+    message += "<tr " + MyColor + "><td>Azomouth / Elevation</td><td>";
+    message += String(tv.solar_az_deg) ; 
+    message += F("</td><td>(Deg)</td><td>");
+    message += String(tv.solar_el_deg) ; 
+    message += F("</td><td>(Deg)</td></tr>");
 
-    if ((tv.iMountType == 0 )&& ( tv.iDayNight == 1 ) &&  ( tv.iTrackMode != 3 )){ // day and mount type
+    if ((tv.iMountType == 0 )&& ( tv.iDayNight == 1 ) &&  ( tv.iTrackMode != 3 )){               // day and mount type
       MyColor = String("bgcolor='yellow'");   
     }else{
       MyColor = String("");   
     }
-    server.sendContent("<tr " + MyColor + "><td>Hour Angle / Elevation</td><td>");
-    server.sendContent(String(tv.ha)) ; 
-    server.sendContent(F("</td><td>(Deg)</td><td>"));
-    server.sendContent(String(tv.sunX)) ; 
-    server.sendContent(F("</td><td>(Deg)</td></tr>"));
+    message += "<tr " + MyColor + "><td>Hour Angle / Elevation</td><td>";
+    message += String(tv.ha) ; 
+    message += F("</td><td>(Deg)</td><td>");
+    message += String(tv.sunX) ; 
+    message += F("</td><td>(Deg)</td></tr>");
   
-    server.sendContent(F("</table><br>")) ; 
+    message += F("</table><br>") ; 
   
+    server.sendContent(message) ;
+    message = "" ;  
   
   }
   SendHTTPPageFooter();
 }
 
 void SendHTTPPageFooter(){
-  server.sendContent(F("<br><br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br>"));
-  server.sendContent(F("<a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>")) ;
-  server.sendContent(F("<a href='/eeprom'>EEPROM Memory Contents</a><br>"));
-  server.sendContent(F("<a href='/sensor'>Sensor Calibration</a><br>"));
-  server.sendContent(F("<a href='/info'>Node Infomation</a><br>"));
-  server.sendContent(F("<a href='/setup'>WiFi Setup</a><br>"));
+  String message = F("<br><br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br>");
+  message += F("<a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>") ;
+  message += F("<a href='/eeprom'>EEPROM Memory Contents</a><br>");
+  message += F("<a href='/rtceeprom'>RTC EEPROM Memory Contents (Solar Log Area)</a><br>");  
+  message += F("<a href='/sensor'>Sensor Calibration</a><br>");
+  message += F("<a href='/solarlog'>Data Log Tabular Output</a><br>");
+  message += F("<a href='/solarchart'>Solar Log as Chart</a><br>");
+  message += F("<a href='/info'>Node Infomation</a><br>");
+  message += F("<a href='/setup'>WiFi Setup</a><br>");
+  message += F("<a href='/email'>Email Setup</a><br>");
   if (!WiFi.isConnected()){
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  
   }else{
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
   }
-  server.sendContent("<br><a href='http://" + String(buff) + ":81/update'>OTA Firmware Update</a><br>");  
-  server.sendContent("<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>");    
-  server.sendContent("<a href='https://github.com/Dougal121/Solar'>Source at GitHub</a><br>");  
-  server.sendContent(F("</body></html>\r\n"));
+  message += "<br><a href='http://" + String(buff) + ":81/update'>OTA Firmware Update</a><br>";  
+  message += "<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>";    
+  message += F("<a href='https://github.com/Dougal121/Solar'>Source at GitHub</a><br>");  
+  message += "<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br><br>";  
+  snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
+  message += "Computer Uptime <b>"+String(buff)+"</b> (day:hr:min) <br>" ;
+  message += F("</body></html>\r\n");
+  server.sendContent(message) ;         
+  message = "" ;
 }
 
 void handleNotFound(){
@@ -1074,17 +1148,20 @@ String sendTDTREnd(){
 }
 
 void SendHTTPHeader(){
+String message = "" ;  
   server.sendHeader(F("Server"),F("ESP8266-on-beetle-juice"),false);
   server.sendHeader(F("X-Powered-by"),F("Dougal-1.1"),false);
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", "");
-  server.sendContent(F("<!DOCTYPE HTML>"));
-  server.sendContent("<head><title>Team Trouble - Solar Tracker "+ String(Toleo) + " </title>");
-  server.sendContent(F("<meta name=viewport content='width=320, auto inital-scale=1'>"));
+  message += F("<!DOCTYPE HTML>");
+  message += "<head><title>Team Trouble - Solar Tracker "+ String(Toleo) + " </title>";
+  message += F("<meta name=viewport content='width=320, auto inital-scale=1'>");
   if ( tv.iDoSave != 0 ){
-    server.sendContent(F("<meta http-equiv='refresh' content='5; url=/'>"));
+    message += F("<meta http-equiv='refresh' content='5; url=/'>");
   }
-  server.sendContent(F("</head><body><html><center>"));  
+  message += F("</head><body><html lang='en'><center>");  
+  server.sendContent(message) ;         
+  message = "" ;  
 }
 
 
