@@ -480,9 +480,9 @@ void ResetSMTPInfo(){
   sprintf(SMTP.server,"121.200.0.25\0") ;   // mail.aussiebroadband.com.au
   sprintf(SMTP.user,"\0") ;
   sprintf(SMTP.password,"\0") ;
-  sprintf(SMTP.FROM,"dougal@plummer.com.au\0") ;
   sprintf(SMTP.FROM,"\0") ;
-  sprintf(SMTP.TO,"dougal@plummersoftware.onmicrosoft.com\0") ;
+  sprintf(SMTP.FROM,"\0") ;
+  sprintf(SMTP.TO,"\0") ;
   sprintf(SMTP.TO,"\0") ;
   sprintf(SMTP.CC,"\0") ;
   sprintf(SMTP.BCC,"\0") ;
