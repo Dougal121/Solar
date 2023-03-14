@@ -408,6 +408,34 @@ void handleRoot() {
     if (i != -1){  // have a request to request a time update
       bDoTimeUpdate = true ;
     }
+    i = String(server.argName(j)).indexOf("staip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPStatic[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPStatic[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPStatic[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPStatic[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("gatip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPGateway[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPGateway[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPGateway[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPGateway[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("mskip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPMask[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPMask[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPMask[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPMask[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("dnsip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPDNS[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPDNS[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPDNS[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPDNS[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
     
   }          
 
@@ -589,6 +617,37 @@ void handleRoot() {
 
     message += F("<tr><td>Time Server</td><td align=center>") ; 
     message += "<form method=get action=" + server.uri() + "><input type='text' name='timsv' value='" + String(ghks.timeServer) + "' maxlength=23 size=16></td><td><input type='submit' value='SET'></form></td></tr>";
+    server.sendContent(message) ;
+    message = "" ;    
+
+    message += F("<tr><td>Network Options</td><td align=center>") ; 
+    message += F("<select name='netop'>") ;
+    if (ghks.lNetworkOptions == 0 ){
+      message += F("<option value='0' SELECTED>0 - DHCP"); 
+      message += F("<option value='1'>1 - Static"); 
+    }else{
+      message += F("<option value='0'>0 - DHCP"); 
+      message += F("<option value='1' SELECTED>1 - Static IP"); 
+    }
+    message += F("</select></td><td align=center><input type='submit' value='SET'></td></tr>");
+    snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPStatic[0],ghks.IPStatic[1],ghks.IPStatic[2],ghks.IPStatic[3]);
+    message += F("<tr><td>Static IP Address</td><td align=center>") ; 
+    message += "<input type='text' name='staip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+  
+    snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPGateway[0],ghks.IPGateway[1],ghks.IPGateway[2],ghks.IPGateway[3]);
+    message += F("<tr><td>Gateway IP Address</td><td align=center>") ; 
+    message += "<input type='text' name='gatip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+  
+    snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPMask[0],ghks.IPMask[1],ghks.IPMask[2],ghks.IPMask[3]);
+    message += F("<tr><td>IP Mask</td><td align=center>") ; 
+    message += "<input type='text' name='mskip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+  
+    snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPDNS[0],ghks.IPDNS[1],ghks.IPDNS[2],ghks.IPDNS[3]);
+    message += F("<tr><td>DNS IP Address</td><td align=center>") ; 
+    message += "<input type='text' name='dnsip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+
+    server.sendContent(message) ;
+    message = "" ;    
 
     message += "<tr><td>ESP ID</td><td align=center>0x" + String(ESP.getChipId(), HEX) + "</td><td align=center>"+String(ESP.getChipId())+"</td></tr>"  ; 
     WiFi.macAddress(mac);      
@@ -874,7 +933,7 @@ void handleRoot() {
 
     message += F("<form method=get action=/><tr><td>Temp Source</td><td align=center>") ; 
     message += F("<select name='tempsrc'>");
-    switch (tv.iMountType == 0 ){
+    switch (tv.iTempInputSource  ){
       case 0:
         message += F("<option value='0' SELECTED> RTC Sensor"); 
         message += F("<option value='1'>1 PT Sensor"); 

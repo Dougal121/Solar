@@ -232,6 +232,10 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int iWindInputSource ;         //  
   float fWindSpeedCal  ;         //  
   float fWindSpeedVel  ;         //  
+  uint8_t  RELAY_XZ_PWM ;       // Physical Output that its connected to
+  uint8_t  RELAY_YZ_PWM ;
+  uint8_t  RELAY_XZ_DIR ;       
+  uint8_t  RELAY_YZ_DIR ;  
   int iTempInputSource ;         //  
   uint16_t  Temp_Alarm_Delay ;            // trigger to temp alarm in seconds
   float Temp_Alarm1 ;
@@ -468,6 +472,10 @@ String host ;
  
   bConfig = false ;   // are we in factory configuratin mode
   display.display();
+  display.display();
+  if ( ghks.lNetworkOptions != 0 ) {
+    WiFi.config(ghks.IPStatic,ghks.IPGateway,ghks.IPMask,ghks.IPDNS ); 
+  }  
   if ( ghks.npassword[0] == 0 ){
     WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point      
   }else{
