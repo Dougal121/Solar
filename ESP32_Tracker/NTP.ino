@@ -148,7 +148,7 @@ void handleTime() {
           ESP.restart() ;
         break;
         case 667: // wipe the memory to factory default
-          BackIntheBoxMemory();
+          BackInTheBoxMemory();
         break;
         case 665:
           sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour  

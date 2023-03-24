@@ -1,4 +1,4 @@
-void BackIntheBoxMemory(){
+void BackInTheBoxMemory(){
   uint8_t i , j ;
 
   ghks.lVersion = LVER ;
@@ -17,6 +17,7 @@ void BackIntheBoxMemory(){
   sprintf(ghks.nssid,"************\0");  // put your default credentials in here if you wish
   sprintf(ghks.npassword,"********\0");  // put your default credentials in here if you wish
   
+
   
   sprintf(ghks.NodeName,"Most Excellent\0") ;
   sprintf(ghks.timeServer, "au.pool.ntp.org\0") ;
@@ -105,6 +106,13 @@ void BackIntheBoxMemory(){
   sprintf(tv.trackername,"Most Excellent\0");
   sprintf(ghks.cssid , "Configure_%X\0",chipid) ;
   bSaveReq = 1 ;
+
+  sprintf(ghks.ADC_Unit,"km/h\0");
+  ghks.ADC_Cal_Ofs = 0 ;
+  ghks.ADC_Cal_Mul = 1.0 ;
+
+  ResetSMTPInfo();
+  ResetADCCalInfo();  
 }
 
 
@@ -116,6 +124,9 @@ int eeAddress ;
     eeAddress += sizeof(ghks) ;
     EEPROM.get(eeAddress,tv) ; 
     eeAddress += sizeof(tv) ;
+    EEPROM.get(eeAddress,SMTP);
+    eeAddress += sizeof(SMTP) ;
+    
     Serial.println("Final Load EEPROM adress " +String(eeAddress));   
     
     tv.xzH = constrain(tv.xzH,ANG_ABS_MIN_HYS_NS,ANG_ABS_MAX_HYS_NS);          // NS Bullshit detectors and correctors 
@@ -173,12 +184,17 @@ int eeAddress ;
     tv.iNightShutdown = constrain(tv.iNightShutdown,0,1);
     tv.iMultiDrive = constrain(tv.iMultiDrive,0,1);
 
+
+  
   }else{
     eeAddress = 0 ;
     EEPROM.put(eeAddress,ghks);
     eeAddress += sizeof(ghks) ;
     EEPROM.put(eeAddress,tv);
     eeAddress += sizeof(tv) ;
+    EEPROM.put(eeAddress,SMTP);
+    eeAddress += sizeof(SMTP) ;
+    
     Serial.println("Final Save EEPROM adress " +String(eeAddress));   
     EEPROM.commit();                                                       // save changes in one go ???
   }

@@ -12,7 +12,7 @@ void handleInfo(){
   ghks.MyIP =  WiFi.localIP() ;
   server.sendContent(F("<br><center><b>Node Info</b><br>"));
   server.sendContent(F("<table border=1 title='Device Info'>"));
-//  server.sendContent("<tr><td>ESP ID</td><td align=center>0x" + String(ESP.getChipId(), HEX) + "</td><td align=center>"+String(ESP.getChipId())+"</td></tr>" ) ; 
+  server.sendContent("<tr><td>ESP ID</td><td align=center>0x" + String((long)chipid, HEX) + "</td><td align=center>"+String((long)chipid)+"</td></tr>" ) ; 
   ghks.MyIP =  WiFi.localIP() ;
   snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);
   server.sendContent("<tr><td>Network Node IP Address</td><td align=center>" + String(buff) + "</td><td>.</td></tr>" ) ; 
@@ -32,15 +32,14 @@ void handleInfo(){
  
   server.sendContent("<tr><td>Last Scan Speed</td><td align=center>" + String(lScanLast) + "</td><td>(per second)</td></tr>" ) ;    
 
-//  server.sendContent("<tr><td>ESP Core Version</td><td align=center>" + String(ESP.getCoreVersion()) + "</td><td>.</td></tr>" ) ;    
-//  server.sendContent("<tr><td>ESP Full Version</td><td align=center>" + String(ESP.getFullVersion()) + "</td><td>.</td></tr>" ) ;    
+  server.sendContent("<tr><td>ESP Chp Revision</td><td align=center>" + String(ESP.getChipRevision()) + "</td><td>.</td></tr>" ) ;    
   server.sendContent("<tr><td>SDK Version</td><td align=center>" + String(ESP.getSdkVersion()) + "</td><td>.</td></tr>" ) ;    
-//  server.sendContent("<tr><td>CPU Volts</td><td align=center>" + String(ESP.getVcc()) + "</td><td>(V)</td></tr>" ) ;    
   server.sendContent("<tr><td>CPU Frequecy</td><td align=center>" + String(ESP.getCpuFreqMHz()) + "</td><td>(MHz)</td></tr>" ) ;    
-//  server.sendContent("<tr><td>Get Rest Reason</td><td align=center>" + String(ESP.getResetReason()) + "</td><td></td></tr>" ) ;    
-//  server.sendContent("<tr><td>Get Reset Into</td><td align=center>" + String(ESP.getResetInfo()) + "</td><td></td></tr>" ) ;    
-//  server.sendContent("<tr><td>Get Sketch Size</td><td align=center>" + String(ESP.getSketchSize()) + "</td><td>(Bytes)</td></tr>" ) ;    
-//  server.sendContent("<tr><td>Free Sketch Space</td><td align=center>" + String(ESP.getFreeSketchSpace()) + "</td><td>(Bytes)</td></tr>" ) ;    
+  server.sendContent("<tr><td>XTAL Frequecy</td><td align=center>" + String(getXtalFrequencyMhz()) + "</td><td>(MHz)</td></tr>" ) ;    
+  server.sendContent("<tr><td>APB Frequecy</td><td align=center>" + String(getApbFrequency()/1000000) + "</td><td>(MHz)</td></tr>" ) ;    
+  server.sendContent("<tr><td>Magnetic Sensor Value</td><td align=center>" + String(magval) + "</td><td>(?)</td></tr>" ) ;    
+  snprintf(buff, BUFF_MAX, "%d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
+  server.sendContent("<tr><td>Computer Uptime</td><td align=center>"+String(buff)+"</td><td>(day:hr:min)</td></tr>" ) ;
 
   server.sendContent(F("</table><br>"));    
   SendHTTPPageFooter();
@@ -104,7 +103,7 @@ void handleSetup() {
           ESP.restart() ;
         break;
         case 667: // wipe the memory to factory default
-          BackIntheBoxMemory();
+          BackInTheBoxMemory();
         break;
         case 665:
           sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour  

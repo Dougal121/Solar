@@ -54,7 +54,7 @@ void handleRoot() {
           ESP.restart() ;
         break;
         case 667: // wipe the memory to factory default
-          BackIntheBoxMemory();
+          BackInTheBoxMemory();
         break;
         case 665:
           sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server 
@@ -870,26 +870,32 @@ void handleRoot() {
 }
 
 void SendHTTPPageFooter(){
-  server.sendContent(F("<br><br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br>"));
-  server.sendContent(F("<a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>")) ;
-  server.sendContent(F("<a href='/eeprom'>EEPROM Memory Contents</a><br>"));
-  server.sendContent(F("<a href='/sensor'>Sensor Calibration</a><br>"));
-  server.sendContent(F("<a href='/info'>Node Infomation</a><br>"));
-  server.sendContent(F("<a href='/setup'>WiFi Setup</a><br>"));
+  String message = F("<br><br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br>\r\n");
+  message += F("<a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>\r\n") ;
+  message += F("<a href='/eeprom'>EEPROM Memory Contents</a><br>\r\n");
+  message += F("<a href='/sensor'>Sensor Calibration</a><br>\r\n");
+  message += F("<a href='/info'>Node Infomation</a><br>\r\n");
+  message += F("<a href='/email'>Email Setup</a><br>\r\n");  
+  message += F("<a href='/adc'>ADC Setup</a><br>\r\n");  
+  message += F("<a href='/log'>Data Logging</a><br>\r\n");  
+  message += F("<a href='/setup'>WiFi Setup</a><br>\r\n");
   if (!WiFi.isConnected()){
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  
   }else{
     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
   }
-  server.sendContent("<br><a href='http://" + String(buff) + "/update'>OTA Firmware Update</a><br>");  
-  server.sendContent("<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>");    
-  server.sendContent("<a href='https://github.com/Dougal121/Solar'>Source at GitHub</a><br>");  
-  server.sendContent("<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br>");  
-  server.sendContent(F("</body></html>\r\n"));
+  message += "<br><a href='http://" + String(buff) + "/update'>OTA Firmware Update</a><br>\r\n";  
+  message += "<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>\r\n";    
+  message += "<a href='https://github.com/Dougal121/Solar'>Source at GitHub</a><br>\r\n";  
+  message += "<a href='http://" + String(buff) + "/backup'>Backup / Restore Settings</a><br>\r\n";  
+  message += F("</body></html>\r\n");
+
+  server.sendContent(message) ;  
+  message = "" ;         
 }
 
 void handleNotFound(){
-  String message = "Seriously - No way DUDE\n\n";
+  String message = "Seriously? - No way DUDE\n\n";
   message += "URI: ";
   message += server.uri();
   message += "\nMethod: ";
@@ -913,17 +919,18 @@ void SendHTTPHeader(){
   server.sendHeader(F("X-Powered-by"),F("Dougal-filament-6"),false);
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
   server.send(200, "text/html", "");
-  server.sendContent(F("<!DOCTYPE HTML>"));
-  server.sendContent("<head><title>Team Trouble - Solar Tracker "+ String(Toleo) + " </title>");
-  server.sendContent(F("<meta name=viewport content='width=320, auto inital-scale=1'>"));
+  String message = F("<!DOCTYPE HTML>");
+  message += "<head><title>Team Trouble - Solar Tracker "+ String(Toleo) + " </title>";
+  message += F("<meta name=viewport content='width=320, auto inital-scale=1'>");
   if ( tv.iDoSave != 0 ){
-    server.sendContent(F("<meta http-equiv='refresh' content='5; url=/'>"));
+    message += F("<meta http-equiv='refresh' content='5; url=/'>");
   }
-  server.sendContent(F("</head><body><html><center>"));  
+  message += F("</head><body><html><center>");  
+  server.sendContent(message) ;  
+  message = "" ;         
 }
 
-String strPINName(int iPin,int *iTmp)
-{
+String strPINName(int iPin,int *iTmp){
   *iTmp = 0 ;
   String pinname = "" ;
     switch(iPin){

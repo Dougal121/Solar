@@ -27,7 +27,7 @@
 #include <TinyGPS.h>            
 #include "ht16k33.h"         // changed the default constructor (changed copy it in github under libs for this project)
 #include <Update.h>          // arduino inbuilt 
-
+#include <ESP_Mail_Client.h>
 
 #include "SSD1306.h"         // these 3 come from the standard book of spells (arduinoo IDE lib manager)
 //#include "SH1106.h"
@@ -38,6 +38,24 @@
 
 #include "StaticPages.h"      // part of this project (tab top right) 
 
+#define MAX_LOCAL_IO 16    // same a sa relay board
+
+#if defined(ESP32)
+#define MaxPinPort  40
+#define MinPinPort   0
+#define ADC_MAX_CHAN  6 
+#elif defined(ESP8266)
+#define MaxPinPort  18
+#define MinPinPort   0
+#define ADC_MAX_CHAN  1 
+#endif
+
+#define ADC_MAX_ALARM ADC_MAX_CHAN * 4
+#define MINBUSSCANINTERVAL 5  // minimum bus scan time in minutes
+#define MINLORASCANINTERVAL 5  // minimum LoRa scan time in minutes
+
+SMTPSession smtp;
+ESP_Mail_Session session;  // Declare the global used ESP_Mail_Session for user defined session credentials
 
 
 //const byte SETPMODE_PIN = D0 ; 
@@ -131,6 +149,18 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   IPAddress IPGateway ;                   // (192,168,0,1)    
   IPAddress IPMask ;                      // (255,255,255,0)   
   IPAddress IPDNS ;                       // (192,168,0,15)   
+  long SelfReBoot ;
+  long lRebootTimeDay ;
+  float ADC_Cal_Mul ;
+  float ADC_Cal_Ofs ;
+  char  ADC_Unit[5] ;                     // units for display
+  uint8_t  ADC_Alarm_Mode ;               // high low etc   0x80 Contious enable 0x40 Master Valve Only Enable  0x20  Alram 2 master  0x10 Alarm 1 master     0x02 Alarm 1 high   0x01 Alarm 2 high
+  float ADC_Alarm1 ;
+  float ADC_Alarm2 ;                      // 
+  uint16_t  ADC_Alarm_Delay ;             // trigger to alarm in seconds
+  uint8_t ADC_Input_PIN1 ;
+  uint8_t ADC_Input_PIN2 ;  
+  long    spare[20];                      // padding to use up next time  
 } general_housekeeping_stuff_t ;          // 
 
 general_housekeeping_stuff_t ghks ;
@@ -229,10 +259,80 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   uint8_t  RELAY_YZ_PWM ;
   uint8_t  RELAY_XZ_DIR ;       
   uint8_t  RELAY_YZ_DIR ;
-  
+  int iTempInputSource ;         //  
+  uint16_t  Temp_Alarm_Delay ;            // trigger to temp alarm in seconds
+  float Temp_Alarm1 ;
+  float Temp_Alarm2 ;                      // 
+  char  Temp_Unit[5] ;                     // units for display
+  uint8_t Temp_Alarm_Mode ;               // high low etc   0x80 Contious enable 0x40 Master Valve Only Enable  0x20  Alram 2 master  0x10 Alarm 1 master     0x02 Alarm 1 high   0x01 Alarm 2 high
+  uint8_t Pos_Alarm_Mode ;                //    0x80 Maaster enable   
+  long  Spare[20] ;                       // padding for next time  
 } tracker_stuff_t ;        // 
 
 tracker_stuff_t   tv   ;    // tracker variables
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  int  port;
+  char server[48] ;
+  char user[48] ;
+  char password[48] ;
+  char FROM[48] ;
+  char TO[48] ;
+  char CC[48] ;
+  char BCC[48] ;
+  bool bSecure ;
+  char message[64] ;
+  char subject[64] ;
+  bool bUseEmail ;
+  float LowTankQty ;
+  bool bSpare ;
+  int  iBusScanInterval ;
+  int  iBusState[8] ; // 16 x 8 bits of bus state
+  int  iLoRaScanInterval ;
+  int  iLoRaTimeOut ;       // seconds > 120  
+} Email_App_stuff_t ;          
+
+Email_App_stuff_t SMTP;
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  float ADC_Cal_Mul ;                            // 
+  float ADC_Cal_Ofs ;                            //
+  char  ADC_Unit[6] ;                            // units for display
+  uint8_t ADC_Input_PIN ;
+  int ADC_RAW ;
+  float ADC_Value ;
+} adc_chan_t ;                                   // 
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  uint8_t  ADC_Channel ;
+  uint8_t  ADC_Mode ;      // high low etc  
+  float    ADC_Value ;     //
+  uint16_t ADC_Delay ;     // trigger to alarm in seconds
+  uint8_t  ADC_Action ;    // high low etc  
+} adc_alarm_t ;                                   // 
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  adc_chan_t chan[ADC_MAX_CHAN];
+  adc_alarm_t alarm[ADC_MAX_ALARM] ;
+} adc_stuff_t ;          // 
+
+adc_stuff_t adcs ;
+
+#define MAX_LOG 288          // 5 min for 24 hrs
+#define LOG_PER_HOUR 12
+
+typedef struct __attribute__((__packed__)) {            
+  time_t  RecTime ;           //  4   
+  float Temp ;                //  8  
+  float Pres ;                // 12
+  float RSSI ;                // 16
+  float EWAngle ;             // 20
+  float NSAngle ;             // 24
+  float EWTarget ;            // 28
+  float NSTarget ;            // 32
+} data_log_t ;                // 8 * 4 bytes  = 32 bytes per log        24 hrs x 12 logs/hr (288)  x 32 bytes = 9216 bytes
+data_log_t  DataLog[MAX_LOG] ;
+
 
 bool bNTPFirst = false ; 
 int iPMode;
@@ -268,7 +368,25 @@ long  MyCheckSum ;
 long  MyTestSum ;
 unsigned long lTimeNext = 0 ;     // next network retry
 bool bPrevConnectionStatus = false;
+bool bSendTestEmail = false ;
+bool bSendSaveConfirm = false ;
+bool bValveActive = false ;
+float Temp_Value ; 
 long lMinUpTime = 0 ;
+long lRet_Email = 0 ;
+float ADC_Value = 0 ;
+int   ADC_Raw = 0 ; 
+int   ADC_Raw1 = 0 ; 
+int   ADC_Raw2 = 0 ;
+bool  bSentADCAlarmEmail = false ;
+long ADC_Trigger = 0 ;
+int   iAutoResetStatus = 0 ; 
+time_t NowTime ;
+String strBusResults ;
+long lMinBusScan = 30 ;
+bool bBusGood = true ;
+int magval = 0 ;
+int iBusReturn = 0 ;
 
 WiFiUDP ntpudp;
 //WiFiUDP ctrludp;
@@ -301,7 +419,7 @@ String host ;
   Serial.println(ghks.cssid[0]);
   if (( ghks.cssid[0] == 0x00 ) || ( ghks.cssid[0] == 0xff ) || ( ghks.lVersion != LVER )){   // pick a default setup ssid if none
     Serial.println("Blank Memory - Resetting Memory to Defaults");
-    BackIntheBoxMemory();           // blank memory detector - cssid should be a roach motel... once set should stay that way
+    BackInTheBoxMemory();           // blank memory detector - cssid should be a roach motel... once set should stay that way
   }
 
   tv.motor_recycle_x = 0 ;         // these are all in eeprom but thet prolly shouldnt be
@@ -418,6 +536,9 @@ String host ;
  
   bConfig = false ;   // are we in factory configuratin mode
   display.display();
+  if ( ghks.lNetworkOptions != 0 ) {
+    WiFi.config(ghks.IPStatic,ghks.IPGateway,ghks.IPMask,ghks.IPDNS ); 
+  }  
   if ( ghks.npassword[0] == 0 ){
     WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point      
   }else{
@@ -494,6 +615,9 @@ String host ;
   server.on("/info", handleInfo);  
   server.on("/stime", handleTime);
   server.on("/sensor",handleSensor);
+  server.on("/adc",adcLocalMap);
+  server.on("/log",datalog1_page);
+  server.on("/email",adcLocalMap);
   server.on("/backup", HTTP_GET , handleBackup);
   server.on("/backup.txt", HTTP_GET , handleBackup);
   server.on("/backup.txt", HTTP_POST,  handleRoot, handleFileUpload); 
@@ -579,6 +703,9 @@ String host ;
   }
   lRebootCode = random(1,+2147483640) ;
   tv.fWindSpeedVel = 0 ;
+
+
+  
 }
 
 //  ##############################  LOOP   #############################
@@ -601,6 +728,10 @@ String msg ;
 int iRelayActiveState ;
 bool bSendCtrlPacket = false ;
 long lTD ;
+bool bTrigger = false ;
+bool bTriggerLess = false ;
+bool bTriggerMore = false ;
+int iMailMsg = 0 ;
 
   server.handleClient();
 //  OTAWebServer.handleClient();
@@ -900,11 +1031,132 @@ long lTD ;
     if ( tv.iDoSave == 2 ) {  // save them Active via web or 
       LoadParamsFromEEPROM(false);
       tv.iDoSave = 0 ;  // only do once
+      bSendSaveConfirm = true ;
     }
     if ( tv.iDoSave == 3 ) {  // load them
       LoadParamsFromEEPROM(true);
       tv.iDoSave = 0 ;  // only do once
     }
+    
+    for ( i = 0 ; i < ADC_MAX_CHAN ; i++ ) {
+      if (( adcs.chan[i].ADC_Input_PIN > 0 ) && (adcs.chan[i].ADC_Input_PIN<40)) {
+        adcs.chan[i].ADC_RAW = analogRead(adcs.chan[i].ADC_Input_PIN) ;
+        adcs.chan[i].ADC_Value = ((adcs.chan[i].ADC_Cal_Mul * (( 1.0 * adcs.chan[i].ADC_RAW ) + adcs.chan[i].ADC_Cal_Ofs ) / 1023 ) )  ;
+      }else{
+        adcs.chan[i].ADC_RAW = 0 ;
+        adcs.chan[i].ADC_Value = 0 ; 
+      }
+    }
+
+    if (ghks.ADC_Input_PIN1 > 0 ){
+      ADC_Raw1 = analogRead(ghks.ADC_Input_PIN1) ;
+    }
+    if (ghks.ADC_Input_PIN2 > 0 ){
+      ADC_Raw2 = analogRead(ghks.ADC_Input_PIN2) ;
+    }
+    ADC_Value = ((ghks.ADC_Cal_Mul * (( 1.0 * ADC_Raw1 ) + ghks.ADC_Cal_Ofs ) / 1023 ) )  ;
+    if (( ghks.ADC_Alarm_Mode & 0x80 ) != 0 ) {
+      bTrigger = false ;
+      bTriggerLess = false ;
+      bTriggerMore = false ;
+      if ((( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ) || ( (( ghks.ADC_Alarm_Mode & 0x02 ) == 0x02 ) && bValveActive ) || ( (( ghks.ADC_Alarm_Mode & 0x04 ) == 0x04 ) && !bValveActive ))  {    // alarm 1 on 
+        if (( ghks.ADC_Alarm_Mode & 0x01 ) != 0 ){ // looking for a high alarm else jump down for a low on
+          if ( ADC_Value > ghks.ADC_Alarm1 ) {     // high alarm test 
+            bTrigger = true ;  
+            bTriggerMore = true ;
+            if (( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ){  // this is the always case
+                iMailMsg = 5 ;              
+            }else{
+              if ( bValveActive ){
+                iMailMsg = 9 ;                 
+              }else{
+                iMailMsg = 13 ;
+              }
+            }
+          }          
+        }else{
+          if ( ADC_Value < ghks.ADC_Alarm1 ) { // low alarm test
+            bTrigger = true ;
+            bTriggerLess = true ;
+            if (( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ){   // this is the always case
+                iMailMsg = 7 ;                                
+            }else{
+              if ( bValveActive ){
+                iMailMsg = 11 ;                  
+              }else{
+                iMailMsg = 15 ;                  
+              }
+            }
+          }          
+        }
+      }
+      if ((( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ) || ( (( ghks.ADC_Alarm_Mode & 0x10 ) == 0x10 ) && bValveActive ) || ( (( ghks.ADC_Alarm_Mode & 0x20 ) == 0x20 ) && !bValveActive ))  {    // alarm 2 on 
+        if (( ghks.ADC_Alarm_Mode & 0x08 ) != 0 ){   // looking for a high alarm on number 2 else jump down for the low one
+          if ( ADC_Value > ghks.ADC_Alarm2 ) {       //  check the level
+            bTrigger = true ;      
+            bTriggerMore = true ;
+            if (( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ){  // this is the always active
+                iMailMsg = 6 ;                                
+            }else{
+              if ( bValveActive ){
+                iMailMsg = 10 ;                  
+              }else{
+                iMailMsg = 14 ;                  
+              }
+            }
+          }          
+        }else{
+          if ( ADC_Value < ghks.ADC_Alarm2 ) {        // check the low alarm 
+            bTrigger = true ;
+            bTriggerLess = true ;
+            if (( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ){   // this is the always active
+                iMailMsg = 8 ;     // alarm 2 always                           
+            }else{
+              if ( bValveActive ){
+                iMailMsg = 12 ;   // alarm 2 valve on               
+              }else{
+                iMailMsg = 16 ;   // alarm 2 valve off               
+              }
+            }
+          }          
+        }
+      }
+      
+      if ( bTrigger ) {
+        if (!bSentADCAlarmEmail) {
+          ADC_Trigger++ ;           
+        }               
+      }else{
+        ADC_Trigger = 0 ;      
+        iMailMsg = 0 ;
+      }
+      if (ADC_Trigger > ghks.ADC_Alarm_Delay) {
+        if ( !bSentADCAlarmEmail ){
+          if ( iMailMsg != 0 ){
+            SendEmailToClient(iMailMsg) ;
+          }
+          bSentADCAlarmEmail = true ;
+        }  
+      }
+    }else{
+      ADC_Trigger = 0 ;
+      iMailMsg = 0 ;
+      bSentADCAlarmEmail = false ;
+    }
+    
+  }else{  // end of theonce per second stuff
+    if (WiFi.isConnected()){  // pointless if no wifi
+      if ( bSendTestEmail ){
+        SendEmailToClient(-1) ;
+        bSendTestEmail = false ;
+      }    
+      if ( bSendSaveConfirm ) {
+        if (SMTP.bUseEmail && SMTP.bSpare ){   // using email and confirming changes
+          SendEmailToClient(-4);               // email save confimation to eeprom
+        }
+        bSendSaveConfirm = false ;
+      }
+    }        
   }
 
   if (rtc_hour != hour()){
@@ -939,7 +1191,17 @@ long lTD ;
     if (hasRTC) {
       tv.T = DS3231_get_treg();
     }
-    
+    if (((minute() % 5) == 0 )) { // data logging
+      i = (hour() * 12) +  ( minute() / 5 ) ;
+      DataLog[i].RecTime = now() ;
+      DataLog[i].Temp = tv.gT ;               
+      DataLog[i].Pres = tv.Pr ;                
+      DataLog[i].RSSI = WiFi.RSSI() ;               
+      DataLog[i].EWAngle = tv.yzAng ;            
+      DataLog[i].NSAngle = tv.xzAng ;             
+      DataLog[i].EWTarget = tv.yzTarget ;            
+      DataLog[i].NSTarget = tv.xzTarget ;               
+    }    
     if (( year() < MINYEAR )|| (bDoTimeUpdate)) {  // not the correct time try to fix every minute
       if ( !bConfig ) { // ie we have a network
         sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  
@@ -949,6 +1211,25 @@ long lTD ;
     if ( hasRTC ){
       rtc_temp = DS3231_get_treg(); 
     }
+    if ( lMinBusScan > 0 ) {
+      lMinBusScan -- ;
+    }
+    if (lMinBusScan == 0 ) {
+      if (SMTP.iBusScanInterval>0) {
+        iBusReturn = i2cBusCheck();
+        if (( iBusReturn != 0 ) && bBusGood ){
+          if ( SMTP.bUseEmail ) {
+            SendEmailToClient(666); 
+          }
+          bBusGood = false ;
+        }
+        if ( SMTP.iBusScanInterval < MINBUSSCANINTERVAL ){
+          lMinBusScan = MINBUSSCANINTERVAL ;          
+        }else{
+          lMinBusScan = SMTP.iBusScanInterval ;          
+        }
+      }
+    }    
     rtc_min = minute() ;
     gps.stats(&gpschars, &goodsent , &failcs );
     gps.f_get_position(&flat, &flon,(long unsigned *) &tv.fixage); // return in degrees
