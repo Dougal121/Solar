@@ -63,7 +63,8 @@ void handleSetup() {
   String MyCheck , MyColor   ;
   byte mac[6];
   String message = "" ;
-
+  String strOption ;
+  String strSelected ;
 //  SerialOutParams();
 
   for (uint8_t j=0; j<server.args(); j++){
@@ -136,23 +137,56 @@ void handleSetup() {
     if (i != -1){  // have a request to set the time zone
       String(server.arg(j)).toCharArray(ghks.cpassword,sizeof(ghks.cpassword));
     }        
-
-    i = String(server.argName(j)).indexOf("naddr");   // ip address setup
-    if (i != -1){  // have a request to set the time zone
+    
+    i = String(server.argName(j)).indexOf("netop");
+    if (i != -1){  // 
+      ghks.lNetworkOptions = String(server.arg(j)).toInt() ;
+      ghks.lNetworkOptions = constrain(ghks.lNetworkOptions,0,255);
+    }
+/*    i = String(server.argName(j)).indexOf("naddr");   // ip address setup
+    if (i != -1){ 
       ghks.MyIP[0] = String(server.arg(j)).substring(0,3).toInt() ;
       ghks.MyIP[1] =String(server.arg(j)).substring(4,7).toInt() ;
       ghks.MyIP[2] = String(server.arg(j)).substring(8,11).toInt() ;
       ghks.MyIP[3] =String(server.arg(j)).substring(12,15).toInt() ;
-    }               
+    } */              
+    i = String(server.argName(j)).indexOf("staip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPStatic[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPStatic[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPStatic[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPStatic[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("gatip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPGateway[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPGateway[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPGateway[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPGateway[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("mskip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPMask[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPMask[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPMask[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPMask[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
+    i = String(server.argName(j)).indexOf("dnsip");
+    if (i != -1){  // have a request to request an IP address
+      ghks.IPDNS[0] = String(server.arg(j)).substring(0,3).toInt() ;
+      ghks.IPDNS[1] =String(server.arg(j)).substring(4,7).toInt() ;
+      ghks.IPDNS[2] = String(server.arg(j)).substring(8,11).toInt() ;
+      ghks.IPDNS[3] =String(server.arg(j)).substring(12,15).toInt() ;
+    }
 
     i = String(server.argName(j)).indexOf("tzone");
     if (i != -1){  // 
       ghks.fTimeZone = String(server.arg(j)).toFloat() ;
       ghks.fTimeZone = constrain(ghks.fTimeZone,-12,12);
-      bDoTimeUpdate = true ; // trigger and update to fix the time
+      bDoTimeUpdate = true ;                                       // trigger and update to fix the time
     }
     i = String(server.argName(j)).indexOf("timsv");
-    if (i != -1){                                    // timesvr
+    if (i != -1){                                                  // timesvr
      String(server.arg(j)).toCharArray( ghks.timeServer , sizeof(ghks.timeServer)) ;
     }    
     i = String(server.argName(j)).indexOf("lpntp");
@@ -169,39 +203,45 @@ void handleSetup() {
     if (i != -1){  // 
       ghks.RemotePortCtrl = String(server.arg(j)).toInt() ;
       ghks.RemotePortCtrl = constrain(ghks.RemotePortCtrl,1,65535);
-    }        
-
+    }     
     
+    i = String(server.argName(j)).indexOf("disop");
+    if (i != -1){  // 
+      ghks.lDisplayOptions = String(server.arg(j)).toInt() ;
+      ghks.lDisplayOptions = constrain(ghks.lDisplayOptions,0,255);
+    }  
+    i = String(server.argName(j)).indexOf("disro");
+    if (i != -1){  // 
+      ii =(( 0x01 & String(server.arg(j)).toInt()) << 1 ) ;
+      ghks.lDisplayOptions = ( ghks.lDisplayOptions & 0xFD ) | ii ;
+      ghks.lDisplayOptions = constrain(ghks.lDisplayOptions,0,255);
+    }  
+    i = String(server.argName(j)).indexOf("cpufr");
+    if (i != -1){  // 
+      ghks.cpufreq = String(server.arg(j)).toInt() ;
+    }  
+    i = String(server.argName(j)).indexOf("magsn");
+    if (i != -1){  // 
+      ghks.magsens = String(server.arg(j)).toInt() ;
+    }  
+
+    i = String(server.argName(j)).indexOf("netop");
+    if (i != -1){  // 
+      ghks.lNetworkOptions = String(server.arg(j)).toInt() ;
+      ghks.lNetworkOptions = constrain(ghks.lNetworkOptions,0,255);
+    }    
+    i = String(server.argName(j)).indexOf("dotmr");
+    if (i != -1){  // 
+      ghks.displaytimer = String(server.arg(j)).toInt() ;
+      ghks.displaytimer = constrain(ghks.displaytimer,0,255);
+    }      
   }          
 
   SendHTTPHeader();
   
-  server.sendContent(F("<link rel='icon' href='data:,'></head><body><html><center><h2>"));
-  server.sendContent(String(tv.trackername).substring(0,16)+" Solar Tracker</h2>");
-
-  server.sendContent(F("<a href='/'>Refresh</a><br><br>")) ;   
-  if ( bSaveReq != 0 ){
-    server.sendContent(F("<blink>"));      
-  }
-  server.sendContent(F("<a href='/?command=2'>Save Parameters to EEPROM</a><br>")) ;         
-
-  snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
-  server.sendContent("<b>"+ String(buff)) ; 
-  if ( year() < 2018 ) {
-    server.sendContent(F("--- CLOCK NOT SET ---")) ;
-  }
-  server.sendContent(F("</b><br>")) ;
-  
-  if ( bSaveReq != 0 ){
-    server.sendContent(F("</blink><font color='red'><b>Changes Have been made to settings.<br>Make sure you save if you want to keep them</b><br></font>")) ;     
-  }
-  server.sendContent(F("<br>")) ;
-
-
-  
   bDefault = false ;
-  server.sendContent("<table border=1 title='Node Settings'>");
-  server.sendContent(F("<tr><th>Parameter</th><th>Value</th><th></th></tr>"));
+  message = "<table border=1 title='WiFi Node Settings'>";
+  message += F("<tr><th>Parameter</th><th>Value</th><th></th></tr>");
 
   snprintf(buff, BUFF_MAX, "%04d/%02d/%02d %02d:%02d", year(AutoOff_t), month(AutoOff_t), day(AutoOff_t) , hour(AutoOff_t), minute(AutoOff_t));
   if (AutoOff_t > now()){
@@ -209,55 +249,161 @@ void handleSetup() {
   }else{
     MyColor =  "" ;
   }
-  server.sendContent(F("<tr><td>Time Zone</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='tzone' value='" + String(ghks.fTimeZone) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Time Zone</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='tzone' value='" + String(ghks.fTimeZone) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-  server.sendContent(F("<tr><td>Local UDP Port NTP</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='lpntp' value='" + String(ghks.localPort) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Local UDP Port NTP</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='lpntp' value='" + String(ghks.localPort) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-  server.sendContent(F("<tr><td>Local UDP Port Control</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='lpctr' value='" + String(ghks.localPortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Local UDP Port Control</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='lpctr' value='" + String(ghks.localPortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-  server.sendContent(F("<tr><td>Remote UDP Port Control</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='rpctr' value='" + String(ghks.RemotePortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Remote UDP Port Control</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='rpctr' value='" + String(ghks.RemotePortCtrl) + "' size=16></td><td><input type='submit' value='SET'></form></td></tr>";
   
-  server.sendContent(F("<tr><td>Network SSID</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='nssid' value='" + String(ghks.nssid) + "' maxlength="+String(sizeof(ghks.nssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
-  server.sendContent(F("<tr><td>Network Password</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='npass' value='" + String(ghks.npassword) + "' maxlength="+String(sizeof(ghks.npassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Network SSID</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='nssid' value='" + String(ghks.nssid) + "' maxlength="+String(sizeof(ghks.nssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
+  message += F("<tr><td>Network Password</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='npass' value='" + String(ghks.npassword) + "' maxlength="+String(sizeof(ghks.npassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-  server.sendContent(F("<tr><td>Config SSID</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='cssid' value='" + String(ghks.cssid) + "' maxlength="+String(sizeof(ghks.cssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
-  server.sendContent(F("<tr><td>Config Password</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='cpass' value='" + String(ghks.cpassword) + "' maxlength="+String(sizeof(ghks.cpassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Config SSID</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='cssid' value='" + String(ghks.cssid) + "' maxlength="+String(sizeof(ghks.cssid))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
+  message += F("<tr><td>Config Password</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='cpass' value='" + String(ghks.cpassword) + "' maxlength="+String(sizeof(ghks.cpassword))+" size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-  server.sendContent(F("<tr><td>Time Server</td><td align=center>")) ; 
-  server.sendContent("<form method=get action=" + server.uri() + "><input type='text' name='timsv' value='" + String(ghks.timeServer) + "' maxlength=23 size=16></td><td><input type='submit' value='SET'></form></td></tr>");
+  message += F("<tr><td>Time Server</td><td align=center>") ; 
+  message += "<form method=get action=" + server.uri() + "><input type='text' name='timsv' value='" + String(ghks.timeServer) + "' maxlength=23 size=16></td><td><input type='submit' value='SET'></form></td></tr>";
 
-//    server.sendContent("<tr><td>ESP ID</td><td align=center>0x" + String(ESP.getChipId(), HEX) + "</td><td align=center>"+String(ESP.getChipId())+"</td></tr>" ) ; 
+//    message += "<tr><td>ESP ID</td><td align=center>0x" + String(ESP.getChipId(), HEX) + "</td><td align=center>"+String(ESP.getChipId())+"</td></tr>"  ; 
   WiFi.macAddress(mac);      
   snprintf(buff, BUFF_MAX, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-  server.sendContent("<tr><td>MAC Address</td><td align=center>" + String(buff) + "</td><td align=center>.</td></tr>" ) ; 
-  server.sendContent("<tr><td>WiFi RSSI</td><td align=center>" + String(WiFi.RSSI()) + "</td><td>(dBm)</td></tr>" ) ; 
-  ghks.MyIP =  WiFi.localIP() ;    
-  snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);
-  server.sendContent("<tr><td>Node IP Address</td><td align=center>" + String(buff) + "</td><td>.</td></tr>" ) ; 
-  server.sendContent("<tr><td>Last Scan Speed</td><td align=center>" + String(lScanCtr) + "</td><td>(per second)</td></tr>" ) ;    
+  message += "<tr><td>MAC Address</td><td align=center>" + String(buff) + "</td><td align=center>.</td></tr>"  ; 
+  message += "<tr><td>WiFi RSSI</td><td align=center>" + String(WiFi.RSSI()) + "</td><td>(dBm)</td></tr>"  ; 
+
+  server.sendContent(message) ;
+  message = "" ; 
+  message += "<form method=postaction=" + server.uri() + "><tr><td colspan=3></td></tr>" ; 
+
+  message += F("<tr><td>Network Options</td><td align=center>") ; 
+  message += F("<select name='netop'>") ;
+  if ((ghks.lNetworkOptions & 0x01 ) == 0 ){
+    message += F("<option value='0' SELECTED>0 - DHCP"); 
+    message += F("<option value='1'>1 - Static"); 
+  }else{
+    message += F("<option value='0'>0 - DHCP"); 
+    message += F("<option value='1' SELECTED>1 - Static IP"); 
+  }
+  message += F("</select></td><td><input type='submit' value='SET'></td></tr>");
+  snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPStatic[0],ghks.IPStatic[1],ghks.IPStatic[2],ghks.IPStatic[3]);
+  message += F("<tr><td>Static IP Address</td><td align=center>") ; 
+  message += "<input type='text' name='staip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+
+  snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPGateway[0],ghks.IPGateway[1],ghks.IPGateway[2],ghks.IPGateway[3]);
+  message += F("<tr><td>Gateway IP Address</td><td align=center>") ; 
+  message += "<input type='text' name='gatip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+
+  snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPMask[0],ghks.IPMask[1],ghks.IPMask[2],ghks.IPMask[3]);
+  message += F("<tr><td>IP Mask</td><td align=center>") ; 
+  message += "<input type='text' name='mskip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr>";
+
+  snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.IPDNS[0],ghks.IPDNS[1],ghks.IPDNS[2],ghks.IPDNS[3]);
+  message += F("<tr><td>DNS IP Address</td><td align=center>") ; 
+  message += "<input type='text' name='dnsip' value='" + String(buff) + "' maxlength=16 size=12></td><td></td></tr></form>";
+
+  server.sendContent(message) ;
+  message = "" ; 
+  message += "<form method=postaction=" + server.uri() + "><tr><td colspan=3></td></tr>" ; 
+
+  message += F("<tr><td>OLED Display Option</td><td align=center>") ; 
+  message += F("<select name='disop'>") ;
+  if ((ghks.lDisplayOptions & 0x01 ) == 0 ){
+    message += F("<option value='0' SELECTED>0 - Normal"); 
+    message += F("<option value='1'>1 - Invert"); 
+  }else{
+    message += F("<option value='0'>0 - Normal"); 
+    message += F("<option value='1' SELECTED>1 - Invert"); 
+  }
+  message += F("</select></td><td><input type='submit' value='SET'></td></tr>\r\n");
+  
+  message += F("<tr><td>Display Power Option</td><td align=center>") ; 
+  message += F("<select name='disro'>") ;
+  if (((ghks.lDisplayOptions & 0x02 ) >> 1 ) == 0 ){
+    message += F("<option value='0' SELECTED>0 - Always On"); 
+    message += F("<option value='1'>1 - Go off with WiFi"); 
+  }else{
+    message += F("<option value='0'>0 - Always On"); 
+    message += F("<option value='1' SELECTED>1 - Go off with WiFi"); 
+  }
+  message += F("</select></td><td></td></tr>\r\n");
+
+  message += F("<tr><td>Turn Wifi and Display off after</td><td align=center>") ; 
+  message += "<input type='text' name='dotmr' value='" + String(ghks.displaytimer) + "' size=4 maxlength=3></td><td>(min) 0 - disables</td></tr>\r\n";
+
+  message += F("<tr><td>Mag Switch Level</td><td align=center>") ; 
+  message += "<input type='text' name='magsn' value='" + String(ghks.magsens) + "' size=4 maxlength=5></td><td>(?)</td></tr>\r\n";
+
+  message += F("<tr><td>CPU Frequency</td><td align=center>") ; 
+  message += F("<select name='cpufr'>") ;
+  for ( j = 0 ; j <= 4 ; j++ ) {
+    strOption = CPUSpeedTextLUT(j,&ii);
+    if ( ghks.cpufreq == ii ){
+      strSelected = "SELECTED" ;
+    }else{
+      strSelected = "" ;
+    }
+    message += "<option value='"+String(ii)+"' " + strSelected + ">" + strOption + "\r\n"; 
+  }
+  message += F("</select></td><td>(MHz)</td></tr>\r\n");
+  
+  message += "<tr><td>Last Scan Speed</td><td align=center>" + String(lScanCtr) + "</td><td>(per second)</td></tr>" ;    
   if( hasRTC ){
     rtc_status = DS3231_get_sreg();
     if (( rtc_status & 0x80 ) != 0 ){
-      server.sendContent(F("<tr><td>RTC Battery</td><td align=center bgcolor='red'>DEPLETED</td>"));
-      server.sendContent("<td><form method=get action=" + server.uri() + "><input type='hidden' name='rtcbf' value='1'><input type='submit' value='RESET'></form></td>");
-      server.sendContent(F("</tr>")) ;            
+      message += F("<tr><td>RTC Battery</td><td align=center bgcolor='red'>DEPLETED</td>");
+      message += "<td><form method=get action=" + server.uri() + "><input type='hidden' name='rtcbf' value='1'><input type='submit' value='RESET'></form></td>";
+      message += F("</tr>") ;            
     }else{
-      server.sendContent(F("<tr><td>RTC Battery</td><td align=center bgcolor='green'>-- OK --</td><td></td></tr>"));
+      message += F("<tr><td>RTC Battery</td><td align=center bgcolor='green'>-- OK --</td><td></td></tr>");
     }
-    server.sendContent("<tr><td>RTC Temperature</td><td align=center>"+String(rtc_temp,1)+"</td><td>(C)</td></tr>") ;                    
+    message += "<tr><td>RTC Temperature</td><td align=center>"+String(rtc_temp,1)+"</td><td>(C)</td></tr>" ;                    
   }
-  server.sendContent(F("</form></table>"));
+  message += F("</form></table>");
   
-  
+  server.sendContent(message) ;
+  message = "" ; 
 
   SendHTTPPageFooter();
 }
+
+
+
+String CPUSpeedTextLUT(int Option , int *speedvalue){
+String tmpStr = "" ;
+
+  switch(Option){
+    case 0:
+      tmpStr = "13 Mhz - Glacial - Danger Will Robinson" ;
+      *speedvalue = 13 ;
+    break;    
+    case 1:
+      tmpStr = "26 Mhz - Sloooow - Danger Will Robinson" ;
+      *speedvalue = 26 ;
+    break;    
+    case 2:
+      tmpStr = "80 Mhz - Slow - Low Power" ;
+      *speedvalue = 80 ;
+    break;    
+    case 3:
+      tmpStr = "160MHz" ;
+      *speedvalue = 160 ;     
+    break;  
+    case 4:  
+    default:
+      tmpStr = "240MHz - Fast - High Power" ;
+      *speedvalue = 240 ;
+    break;    
+  }
+  return(tmpStr);  
+}
+
 

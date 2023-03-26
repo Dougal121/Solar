@@ -382,11 +382,7 @@ void DisplayEmailSetup() {
   }
 
   SendHTTPHeader();   //  ################### START OF THE RESPONSE  ######
-
-  message = F("<a href='/?command=2'>Save Parameters to EEPROM</a><br>");
-  if ( bSaveReq != 0 ){
-    message = F("</blink><font color='red'><b>Changes Have been made to settings.<br>Make sure you save if you want to keep them</b><br></font><br>") ;     
-  }
+        
   message += F("<table border=1 title='Email setup for SCADA'>") ;
   message += F("<tr><th>Email Parameter</th><th>Value</th><th>Units</th><th>.</th></tr>") ;              
   message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Port</td><td align=center title='Popular Values 25 , 465 , 2525 , 587'><input type='text' name='smpo' value='"+String(SMTP.port)+"' size=30></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;

@@ -39,6 +39,8 @@
 #include "StaticPages.h"      // part of this project (tab top right) 
 
 #define MAX_LOCAL_IO 16    // same a sa relay board
+#define ESP32_BUILTIN_LED 2
+
 
 #if defined(ESP32)
 #define MaxPinPort  40
@@ -141,9 +143,10 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   char cssid[32] ;                        //   
   char cpassword[24] ;                    // 
   long lDisplayOptions  ;                 //  
-  uint8_t lNetworkOptions  ;              // 84 
-  uint8_t lSpare1  ;                      // 85 
-  uint8_t lSpare2  ;                      // 86   
+  uint8_t lNetworkOptions  ;              //  
+  uint8_t cpufreq ;                       //    240 160 80   not flash at 26
+  uint8_t displaytimer ;                  //     how log does the wifi stay on for (minutes) ?  0 fo display on always (display piggbacks on this)
+  uint8_t magsens ;                       //     magnet sensor sesitivity use instead of the button
   char timeServer[40] ;                   //    = {"au.pool.ntp.org\0"}
   IPAddress IPStatic ;                    // (192,168,0,123)   
   IPAddress IPGateway ;                   // (192,168,0,1)    
@@ -493,94 +496,13 @@ String host ;
     Serial.begin(115200);
     Serial.println("Warp Speed no GPS !");
   }
-  Serial.setDebugOutput(true);  
-  snprintf(buff, BUFF_MAX,"%08X\0",chipid);
-  Serial.println("Chip ID " + String(buff));
-  Serial.println("Configuring WiFi...");
+
 
   display.clear();
   display.setFont(ArialMT_Plain_10);
-  snprintf(buff, BUFF_MAX,"Configure_%08X\0",chipid);
-  display.drawString(0, 11, "Chip ID " + String(buff) );
-  display.display();
 
-//  sprintf(ghks.nssid,"WLAN-PLUMMER\0") ;
-//  sprintf(ghks.npassword,"cheegh5S\0") ;
-//  sprintf(ghks.nssid,"TP-LINK_52FC8C\0");
-//  sprintf(ghks.npassword,"0052FC8C\0");
+  StartWiFi();
 
-  WiFi.disconnect();
-  Serial.println("Configuring soft access point...");
-  WiFi.mode(WIFI_AP_STA);  // we are having our cake and eating it eee har
-  sprintf(ghks.cssid,"Configure_%08X\0",chipid);
-  if (( ghks.cssid[0] == 0 ) || ( ghks.cssid[1] == 0 ) || ( ghks.cssid[0] == 255 ) || ( ghks.cssid[1] == 255 )){   // pick a default setup ssid if none
-    sprintf(ghks.cpassword,"\0");
-  }
-  ghks.MyIPC = IPAddress (192, 168, 5 +(chipid & 0x7f ) , 1);
-  WiFi.softAPConfig(ghks.MyIPC,ghks.MyIPC,IPAddress (255, 255, 255 , 0));  
-  Serial.println("Starting access point...");
-  Serial.print("SSID: ");
-  Serial.println(ghks.cssid);
-  Serial.print("Password: >");
-  Serial.print(ghks.cpassword);
-  Serial.println("< " + String(ghks.cpassword[0]));
-  if (( ghks.cpassword[0] == 0 ) || ( ghks.cpassword[0] == 0xff)){
-    WiFi.softAP((char*)ghks.cssid);                   // no passowrd
-  }else{
-    WiFi.softAP((char*)ghks.cssid,(char*) ghks.cpassword);
-  }
-  ghks.MyIPC = WiFi.softAPIP();  // get back the address to verify what happened
-  Serial.print("Soft AP IP address: ");
-  snprintf(buff, BUFF_MAX, ">> IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);      
-  Serial.println(buff);
- 
-  bConfig = false ;   // are we in factory configuratin mode
-  display.display();
-  if ( ghks.lNetworkOptions != 0 ) {
-    WiFi.config(ghks.IPStatic,ghks.IPGateway,ghks.IPMask,ghks.IPDNS ); 
-  }  
-  if ( ghks.npassword[0] == 0 ){
-    WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point      
-  }else{
-    WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
-  }
-  while (( WiFi.status() != WL_CONNECTED ) && ( j < MAX_WIFI_TRIES )) {
-    j = j + 1 ;
-    delay(250);
-    digitalWrite(BUILTIN_LED,!digitalRead(BUILTIN_LED));               // rapid flashy when we are trying to login
-    delay(250);
-    display.clear();
-    display.setTextAlignment(TEXT_ALIGN_LEFT);
-    snprintf(buff, BUFF_MAX,"Configure_%08X\0",chipid);
-
-    display.drawString(0, 0, "Chip ID " + String(buff) );
-    display.drawString(0, 9, String("SSID:") );
-    display.drawString(0, 18, String("Password:") );
-    display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.drawString(128 , 0, String(WiFi.RSSI()));
-    display.drawString(128, 9, String(ghks.nssid) );
-    display.drawString(128, 18, String(ghks.npassword) );
-    display.drawString(j*4, 27 , String(">") );
-    display.drawString(0, 36 , String(1.0*j/2) + String(" (s)" ));   
-    snprintf(buff, BUFF_MAX, ">>  IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);            
-    display.setTextAlignment(TEXT_ALIGN_CENTER);
-    display.drawString(63 , 54 ,  String(buff) );
-    display.display();     
-    digitalWrite(BUILTIN_LED,!digitalRead(BUILTIN_LED));
-  } 
-  if ( j >= MAX_WIFI_TRIES ) {
-     bConfig = true ;
-     WiFi.disconnect();
-  }else{
-     Serial.println("");
-     Serial.println("WiFi connected");  
-     Serial.print("IP address: ");
-     ghks.MyIP =  WiFi.localIP() ;
-     snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);            
-     Serial.println(buff);
-     display.drawString(0 , 53 ,  String(buff) );
-     display.display();
-  }
   if (ghks.localPortCtrl == ghks.localPort ){             // bump the NTP port up if they ar the same
     ghks.localPort++ ;
   }
@@ -617,7 +539,8 @@ String host ;
   server.on("/sensor",handleSensor);
   server.on("/adc",adcLocalMap);
   server.on("/log",datalog1_page);
-  server.on("/email",adcLocalMap);
+  server.on("/chart",chart1_page);
+  server.on("/email",DisplayEmailSetup);
   server.on("/backup", HTTP_GET , handleBackup);
   server.on("/backup.txt", HTTP_GET , handleBackup);
   server.on("/backup.txt", HTTP_POST,  handleRoot, handleFileUpload); 
@@ -694,19 +617,11 @@ String host ;
 //  OTAWebServer.begin();  
   Serial.println("End of Setup");
   delay(100);
-  if (tv.iUseGPS==1){
-    Serial.setDebugOutput(false);  
-    Serial.begin(9600);    // gps on serial port
-  }else{
-    Serial.begin(115200);
-    Serial.println("Warp Speed no GPS !");
-  }
+
   lRebootCode = random(1,+2147483640) ;
   tv.fWindSpeedVel = 0 ;
-
-
-  
 }
+
 
 //  ##############################  LOOP   #############################
 void loop() {

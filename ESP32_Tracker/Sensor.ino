@@ -74,28 +74,6 @@ void handleSensor() {
   }          
 
   SendHTTPHeader();
-  
-  server.sendContent(F("<link rel='icon' href='data:,'></head><body><html><center><h2>"));
-  server.sendContent(String(tv.trackername).substring(0,16)+" Solar Tracker</h2>");
-
-  server.sendContent(F("<a href='/'>Refresh</a><br><br>")) ;   
-  if ( bSaveReq != 0 ){
-    server.sendContent(F("<blink>"));      
-  }
-  server.sendContent(F("<a href='/?command=2'>Save Parameters to EEPROM</a><br>")) ;         
-
-  snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
-  server.sendContent("<b>"+ String(buff)) ; 
-  if ( year() < 2018 ) {
-    server.sendContent(F("--- CLOCK NOT SET ---")) ;
-  }
-  server.sendContent(F("</b><br>")) ;
-  
-  if ( bSaveReq != 0 ){
-    server.sendContent(F("</blink><font color='red'><b>Changes Have been made to settings.<br>Make sure you save if you want to keep them</b><br></font>")) ;     
-  }
-  server.sendContent(F("<br>")) ;
-
 
   server.sendContent(F("<a href='/sensor'>Update</a><br><br>")) ;         
   server.sendContent(F("<br><b>Sensor Calibration System</b><table border=1 title='Magnetometer Sensor Calibration'><tr><th rowspan=2> Parameter</th><th colspan=3>Value</th></tr>")) ; 

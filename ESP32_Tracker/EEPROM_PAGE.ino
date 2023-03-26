@@ -8,6 +8,7 @@ void DisplayEEPROM() {
   int d = 1 ;
   int  address;
   char buff[10];
+  String message = "" ;
 
   for (uint8_t j=0; j<server.args(); j++){
     k = String(server.argName(j)).indexOf("RADIX");
@@ -32,83 +33,94 @@ void DisplayEEPROM() {
   }  
 //  SerialOutParams();
   SendHTTPHeader();
-  server.sendContent(F("<a href='/'>Home</a><br>")) ;         
-  server.sendContent(F("<a href='/eeprom'>Refresh</a><br><br>")) ;         
-  
-  server.sendContent("<br><form method=post action=" + server.uri() + ">");
-  server.sendContent("Radix: <select name=RADIX>");
+
+  message += "<br><form method=post action=" + server.uri() + ">" ;
+  message += F("Radix: <select name=RADIX>") ;
   switch(r){
     case 2:
-      server.sendContent(F("<option value='2' SELECTED>Binary")); 
-      server.sendContent(F("<option value='8'>Octal")); 
-      server.sendContent(F("<option value='10'>Decimal")); 
-      server.sendContent(F("<option value='16'>Hexadecimal")); 
+      message += F("<option value='2' SELECTED>Binary") ; 
+      message += F("<option value='8'>Octal") ; 
+      message += F("<option value='10'>Decimal") ; 
+      message += F("<option value='16'>Hexadecimal") ; 
+      message += F("<option value='1'>ASCII") ; 
     break;
     case 8:
-      server.sendContent(F("<option value='2'>Binary")); 
-      server.sendContent(F("<option value='8' SELECTED>Octal")); 
-      server.sendContent(F("<option value='10'>Decimal")); 
-      server.sendContent(F("<option value='16'>Hexadecimal")); 
+      message += F("<option value='2'>Binary") ; 
+      message += F("<option value='8' SELECTED>Octal") ; 
+      message += F("<option value='10'>Decimal") ; 
+      message += F("<option value='16'>Hexadecimal") ; 
+      message += F("<option value='1'>ASCII") ; 
     break;
     case 10:
-      server.sendContent(F("<option value='2'>Binary")); 
-      server.sendContent(F("<option value='8'>Octal")); 
-      server.sendContent(F("<option value='10' SELECTED>Decimal")); 
-      server.sendContent(F("<option value='16'>Hexadecimal")); 
+      message += F("<option value='2'>Binary") ; 
+      message += F("<option value='8'>Octal") ; 
+      message += F("<option value='10' SELECTED>Decimal") ; 
+      message += F("<option value='16'>Hexadecimal") ; 
+      message += F("<option value='1'>ASCII") ; 
+    break;
+    case 1:
+      message += F("<option value='2'>Binary") ; 
+      message += F("<option value='8'>Octal") ; 
+      message += F("<option value='10'>Decimal") ; 
+      message += F("<option value='16'>Hexadecimal") ; 
+      message += F("<option value='1' SELECTED>ASCII") ; 
     break;
     default:
-      server.sendContent(F("<option value='2'>Binary")); 
-      server.sendContent(F("<option value='8'>Octal")); 
-      server.sendContent(F("<option value='10'>Decimal")); 
-      server.sendContent(F("<option value='16' SELECTED>Hexadecimal")); 
+      message += F("<option value='2'>Binary") ; 
+      message += F("<option value='8'>Octal") ;  
+      message += F("<option value='10'>Decimal") ; 
+      message += F("<option value='16' SELECTED>Hexadecimal") ; 
+      message += F("<option value='1'>ASCII") ; 
     break;
   }
-  server.sendContent("</select>");
-  server.sendContent("Bits: <select name=BITS>");
+  message += F("</select>") ;
+  message += F("Bits: <select name=BITS>") ;
   switch(b){
     case 32:
-      server.sendContent(F("<option value='8'>8 Bit - Byte")); 
-      server.sendContent(F("<option value='16'>16 Bit - Word")); 
-      server.sendContent(F("<option value='32' SELECTED>32 Bit - DWord")); 
+      message += F("<option value='8'>8 Bit - Byte"); 
+      message += F("<option value='16'>16 Bit - Word"); 
+      message += F("<option value='32' SELECTED>32 Bit - DWord"); 
     break;
     case 16:
-      server.sendContent(F("<option value='8'>8 Bit - Byte")); 
-      server.sendContent(F("<option value='16' SELECTED>16 Bit - Word")); 
-      server.sendContent(F("<option value='32'>32 Bit - DWord")); 
+      message += F("<option value='8'>8 Bit - Byte"); 
+      message += F("<option value='16' SELECTED>16 Bit - Word"); 
+      message += F("<option value='32'>32 Bit - DWord"); 
     break;
     default:
-      server.sendContent(F("<option value='8' SELECTED>8 Bit - Byte")); 
-      server.sendContent(F("<option value='16'>16 Bit - Word")); 
-      server.sendContent(F("<option value='32'>32 Bit - DWord")); 
+      message += F("<option value='8' SELECTED>8 Bit - Byte"); 
+      message += F("<option value='16'>16 Bit - Word"); 
+      message += F("<option value='32'>32 Bit - DWord"); 
     break;
   }
-  server.sendContent("</select>");
-  server.sendContent(F("<input type='submit' value='SET'></form><br><table border=1 title='EEPROM Contents'><tr><th>.</th>"));
+  message += F("</select>");
+  message += F("<input type='submit' value='SET'></form><br>\r\n<table border=1 title='EEPROM Contents'><tr>\r\n<th>.</th>");
+  server.sendContent(message);
+  message = "" ;
  // table header
   for (i = 0; i < 32; i+=d) {
-    server.sendContent("<th>"+String(i,HEX)+"</th>");
+    message += "<th>"+String(i,HEX)+"</th>";
   }
-  server.sendContent(F("</tr>"));
+  message += F("</tr>\r\n");
   for (address = 0; address < 1984  ; address+=d ) {
     if (address % 32 == 0) {
-      server.sendContent(F("<tr>"));
-      server.sendContent("<td align=center><b>"+String((address & 0xFFE0),HEX)+"</b></td>");
+      message += F("<tr>");
+      message += "<td align=center><b>"+String((address & 0xFFE0),HEX)+"</b></td>";
     }
     switch(b){
       case 16:
         EEPROM.get(address,ii);
         switch(r){
           case 8:
-            server.sendContent("<td>"+String(ii,OCT)+"</td>");
+            message += "<td>"+String(ii,OCT)+"</td>";
           break;
           case 10:
-            server.sendContent("<td>"+String(ii,DEC)+"</td>");
+            message += "<td>"+String(ii,DEC)+"</td>";
           break;
           case 2:
-            server.sendContent("<td>"+String(ii,BIN)+"</td>");
+            message += "<td>"+String(ii,BIN)+"</td>";
           break;
           default:
-            server.sendContent("<td>"+String(ii,HEX)+"</td>");
+            message += "<td>"+String(ii,HEX)+"</td>";
           break;
         }  
       break;
@@ -116,16 +128,16 @@ void DisplayEEPROM() {
         EEPROM.get(address,iiii);
         switch(r){
           case 8:
-            server.sendContent("<td>"+String(iiii,OCT)+"</td>");
+            message += "<td>"+String(iiii,OCT)+"</td>";
           break;
           case 10:
-            server.sendContent("<td>"+String(iiii,DEC)+"</td>");
+            message += "<td>"+String(iiii,DEC)+"</td>";
           break;
           case 2:
-            server.sendContent("<td>"+String(iiii,BIN)+"</td>");
+            message += "<td>"+String(iiii,BIN)+"</td>";
           break;
           default:
-            server.sendContent("<td>"+String(iiii,HEX)+"</td>");
+            message += "<td>"+String(iiii,HEX)+"</td>";
           break;
         }  
       break;
@@ -133,27 +145,44 @@ void DisplayEEPROM() {
         EEPROM.get(address,i);
         switch(r){
           case 8:
-            server.sendContent("<td>"+String(i,OCT)+"</td>");
+            message += "<td>"+String(i,OCT)+"</td>";
           break;
           case 10:
-            server.sendContent("<td>"+String(i,DEC)+"</td>");
+            message += "<td>"+String(i,DEC)+"</td>";
           break;
           case 2:
-            server.sendContent("<td>"+String(i,BIN)+"</td>");
+            message += "<td>"+String(i,BIN)+"</td>";
+          break;
+          case 1:
+            if ( isPrintable(char(i)) ){
+              message += "<td>"+String(char(i))+"</td>";
+            }else{
+              message += "<td>-</td>";              
+            }
           break;
           default:
-            server.sendContent("<td>"+String(i,HEX)+"</td>");
+            if ( i < 16 ){
+              message += "<td>0"+String(i,HEX)+"</td>";              
+            }else{
+              message += "<td>"+String(i,HEX)+"</td>";
+            }
           break;
         }  
       break;
     }
     if (address % 32 == 31) {
-      server.sendContent(F("</tr>"));
+      message += F("</tr>\r\n");
+      server.sendContent(message);
+      message = "" ;
     }
   }
-  server.sendContent(F("</tr></table>"));
+  message += F("</tr></table>\r\n");
+  server.sendContent(message);
+  message = "" ;
+  
   SendHTTPPageFooter() ;
 }
+
 
 void handleBackup(){
   int i , j ;

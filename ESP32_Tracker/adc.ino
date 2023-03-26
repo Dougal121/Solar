@@ -138,6 +138,7 @@ void adcLocalMap() {
   
   //  ######################  START RESPONCE  ########################
   SendHTTPHeader();
+  
   message = F("<br><center><b>ADC Setup</b><br><table border=1 title='ADC Setup'>\r\n");
   message += F("<tr><th>Chanel</th><th>PIN</th><th>Mult</th><th>Ofs</th><th>Units</th><th>Raw</th><th>Values</th><th colspan=2></th></tr>\r\n");  
   for ( j=0; j<ADC_MAX_CHAN; j++){
@@ -165,8 +166,8 @@ void adcLocalMap() {
   message = F("<br><center><b>ADC Alarms</b><br><table border=1 title='ADC Alarms'>\r\n");
   message += F("<tr><th>Alarm No</th><th>Chanel</th><th>Alarm</th><th>State</th><th>Level</th><th>Delay(s)</th><th></th></tr>\r\n");  
   for ( j=0; j<ADC_MAX_ALARM; j++){
-    message += "<form method=get action=" + server.uri() + "><input type='hidden' name='almno' value='"+String(j)+"'><tr><td align=center>"+String(j)+"</td>" ;
-    message += "<input type='text' name='almch' value='"+String(adcs.alarm[j].ADC_Channel)+"'><tr>" ;
+    message += "<form method=get action=" + server.uri() + "><input type='hidden' name='almno' value='"+String(j)+"'><tr><td align=center>"+String(j)+"</td><td>" ;
+    message += "<input type='text' name='almch' value='"+String(adcs.alarm[j].ADC_Channel)+"'></td>" ;
     message += "<td><select name='alme1'>" ;
     for ( k = 0 ; k < 4 ; k++ ){ 
       if ((( adcs.alarm[j].ADC_Mode & 0x06 )>>1 ) == k ){
@@ -194,7 +195,8 @@ void adcLocalMap() {
         message += F("<option value='1' SELECTED>Greater Than") ;
       break;
     }
-    message += "</select></td><td><input type='text' name='all"+String(j)+"' value='"+String(adcs.alarm[j].ADC_Value)+"' size=6></td><td><input type='text' name='all1' value='"+String(adcs.alarm[j].ADC_Delay)+"' size=6></td>" ;
+    message += "</select></td><td><input type='text' name='all"+String(j)+"' value='"+String(adcs.alarm[j].ADC_Value)+"' size=6></td>" ;
+    message += "<td><input type='text' name='all1' value='"+String(adcs.alarm[j].ADC_Delay)+"' size=6></td>" ;
     message += "<td><input type='submit' value='SET'></td></form></tr>\r\n" ;
     server.sendContent(message) ;
     message = "" ;
