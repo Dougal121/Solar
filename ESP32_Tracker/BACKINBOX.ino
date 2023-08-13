@@ -19,7 +19,7 @@ void BackInTheBoxMemory(){
   
 
   
-  sprintf(ghks.NodeName,"Most Excellent\0") ;
+  sprintf(ghks.NodeName,"ESP32\0") ;
   sprintf(ghks.timeServer, "au.pool.ntp.org\0") ;
 
   ghks.localPort = 2390;
@@ -107,10 +107,12 @@ void BackInTheBoxMemory(){
   sprintf(ghks.cssid , "Configure_%X\0",chipid) ;
   bSaveReq = 1 ;
 
-  sprintf(ghks.ADC_Unit,"km/h\0");
+/*  sprintf(ghks.ADC_Unit,"km/h\0");
   ghks.ADC_Cal_Ofs = 0 ;
-  ghks.ADC_Cal_Mul = 1.0 ;
-
+  ghks.ADC_Cal_Mul = 1.0 ;  */
+  ghks.cpufreq = 240 ;
+  ghks.displaytimer = 120 ;
+  
   ResetSMTPInfo();
   ResetADCCalInfo();  
 }
@@ -122,10 +124,15 @@ int eeAddress ;
     eeAddress = 0 ;
     EEPROM.get(eeAddress,ghks);
     eeAddress += sizeof(ghks) ;
+    Serial.println("read - ghks structure size " +String(eeAddress));   
+    eeAddress = TV_BASE ;  // 450
+    
     EEPROM.get(eeAddress,tv) ; 
     eeAddress += sizeof(tv) ;
     EEPROM.get(eeAddress,SMTP);
     eeAddress += sizeof(SMTP) ;
+    EEPROM.get(eeAddress,adcs);
+    eeAddress += sizeof(adcs) ;
     
     Serial.println("Final Load EEPROM adress " +String(eeAddress));   
     
@@ -183,17 +190,25 @@ int eeAddress ;
     tv.iOutputType = constrain(tv.iOutputType,0,3);
     tv.iNightShutdown = constrain(tv.iNightShutdown,0,1);
     tv.iMultiDrive = constrain(tv.iMultiDrive,0,1);
-
-
+    for (int j=0; j<ADC_MAX_ALARM; j++){
+      adcs.alarm[j].ADC_Trigger = 0 ; 
+      adcs.alarm[j].ADC_bSentADCAlarmEmail = false ;      // high low etc  
+    }
+    ReadDataLogsFromEEPROM();
   
   }else{
     eeAddress = 0 ;
     EEPROM.put(eeAddress,ghks);
     eeAddress += sizeof(ghks) ;
+    Serial.println("write - ghks structure size " +String(eeAddress));   
+
+    eeAddress = TV_BASE ;        // 450
     EEPROM.put(eeAddress,tv);
     eeAddress += sizeof(tv) ;
     EEPROM.put(eeAddress,SMTP);
     eeAddress += sizeof(SMTP) ;
+    EEPROM.put(eeAddress,adcs);
+    eeAddress += sizeof(adcs) ;
     
     Serial.println("Final Save EEPROM adress " +String(eeAddress));   
     EEPROM.commit();                                                       // save changes in one go ???

@@ -18,14 +18,14 @@ void IndicateReboot(void){
 
 void SendEmailToClient(int iMessageID){
 char csTemp[MESSAGE_MAX] ;
-int i ;
+int i ,j ;
 String strMyTmp ;
 IPAddress MyIP;
 bool bRoach = false ;
 //  Serial.println("Send Email Called");
 
   MyIP =  WiFi.localIP() ;                  
-  if (WiFi.isConnected() && (MyIP[0] != 0 )&& (MyIP[3] != 0 ))  {
+  if (WiFi.isConnected() && (MyIP[0] != 0 )&& (MyIP[3] != 0 ) && bPower )  {
     if (( String(SMTP.FROM).length() >5 )&&( String(SMTP.TO).length() >5 ) && ( String(SMTP.server).indexOf('.') > 0 ) && ( String(SMTP.TO).indexOf('.')>0  )){
 //      Serial.println( "Going into the send - MessageID " + String(iMessageID) );
       snprintf(csTemp,MESSAGE_MAX,"\0"  )  ;  
@@ -48,35 +48,16 @@ bool bRoach = false ;
         case 4:  // main soleniod CB trip
             snprintf(csTemp,MESSAGE_MAX,"%s - Main Solenoid Circuit Breaker Trip \0",ghks.NodeName  )  ;  
         break ;
-        case 5:  // ADC value greater than Alarm 1
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) greater then Alarm 1 \0",ghks.NodeName,ADC_Value, ghks.ADC_Unit )  ;  
-        break ;
-        case 6:  // ADC value greater than Alarm 2
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) greater then Alarm 2 \0",ghks.NodeName,ADC_Value,ghks.ADC_Unit )  ;  
-        break ;
-        case 7:  // ADC value less than Alarm 1
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) less then Alarm 1 \0",ghks.NodeName,ADC_Value,ghks.ADC_Unit  )  ;  
-        break ;
-        case 8:  // ADC value less than Alarm 2
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) less then Alarm 2 \0",ghks.NodeName,ADC_Value,ghks.ADC_Unit  )  ;  
-        break ;
-        case 15:  // Temp value greater than Alarm 1
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) greater then Alarm 1 \0",ghks.NodeName,Temp_Value, tv.Temp_Unit )  ;  
-        break ;
-        case 16:  // Temp value greater than Alarm 2
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) greater then Alarm 2 \0",ghks.NodeName,Temp_Value,tv.Temp_Unit )  ;  
-        break ;
-        case 17:  // Temp value less than Alarm 1
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) less then Alarm 1 \0",ghks.NodeName,Temp_Value,tv.Temp_Unit  )  ;  
-        break ;
-        case 18:  // Temp value less than Alarm 2
-            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) less then Alarm 2 \0",ghks.NodeName,Temp_Value,tv.Temp_Unit  )  ;  
-        break ;
-
         default: snprintf(csTemp,MESSAGE_MAX,"%s \0",SMTP.subject ) ; 
         break ;
       }
-
+      if ((iMessageID >= 20) and (iMessageID<(20+ADC_MAX_ALARM))){
+          j = constrain(adcs.alarm[iMessageID - 20].ADC_Channel,0,ADC_MAX_CHAN) ;    
+          snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) greater then Alarm 1 \0",ghks.NodeName,adcs.chan[j].ADC_Value, adcs.chan[j].ADC_Unit )  ;          
+      }
+      if ((iMessageID >= 40) and (iMessageID<(40+ADC_MAX_ALARM))){
+            snprintf(csTemp,MESSAGE_MAX,"%s - %f (%s) less then Alarm 1 \0",ghks.NodeName,adcs.chan[j].ADC_Value, adcs.chan[j].ADC_Unit )  ;  
+      }
       // Set the session config      
       session.server.host_name = String(SMTP.server) ;     //  "smtp.office365.com"; // for outlook.com
       session.server.port = SMTP.port ;
@@ -138,8 +119,8 @@ bool bRoach = false ;
       snprintf(buff, BUFF_MAX, "Air Pressure     %.2f   Y(N/S) %.2f \r\n\0", tv.Pr );
       strcat(csTemp,buff) ;
 
-      snprintf(buff, BUFF_MAX, "ADC Input RAW %d   Scaled  %.2f  (%s) \r\n\0", ADC_Raw , ADC_Value , ghks.ADC_Unit );
-      strcat(csTemp,buff) ;
+//      snprintf(buff, BUFF_MAX, "ADC Input RAW %d   Scaled  %.2f  (%s) \r\n\0", ADC_Raw , ADC_Value , ghks.ADC_Unit );
+//      strcat(csTemp,buff) ;
 
       snprintf(buff, BUFF_MAX, "\r\nTarget Angle Y(E/W)     %.2f   Y(N/S) %.2f \r\n\0",tv.yzTarget, tv.xzTarget );
       strcat(csTemp,buff) ;
@@ -287,6 +268,7 @@ void DisplayEmailSetup() {
       }
     }     
 
+/*
     i = String(server.argName(j)).indexOf("allu");
     if (i != -1){  
      String(server.arg(j)).toCharArray(ghks.ADC_Unit , sizeof(ghks.ADC_Unit)) ;
@@ -377,7 +359,7 @@ void DisplayEmailSetup() {
         ghks.ADC_Alarm_Mode |=  0x01 ;              
       }
     }  
-        
+*/        
     
   }
 
@@ -406,6 +388,7 @@ void DisplayEmailSetup() {
   message += "<tr><form method=post action=" + server.uri() + "><td>SMTP Secure<input type='hidden' name='smbz' value='0'></td><td align=center><input type='checkbox' name='smbs' " + String(MyCheck)+ "></td><td>.</td><td><input type='submit' value='SET'></td></form></tr>" ;
   message += "<tr><td>Last Email Status</td><td>"+String(lRet_Email)+"</td><td colspan=2>.</td></tr>" ;
   message += "<tr></td><td colspan=4>.</td></tr>" ;
+/*  
   message += "<tr><form method=post action=" + server.uri() + "><td>ADC Multiplier</td><td align=center><input type='text' name='adcm' value='"+String(ghks.ADC_Cal_Mul)+"' size=30></td><td></td><td><input type='submit' value='SET'></td></form></tr>" ;
   message += "<tr><form method=post action=" + server.uri() + "><td>ADC Offset</td><td align=center><input type='text' name='adco' value='"+String(ghks.ADC_Cal_Ofs)+"' size=30></td><td></td><td><input type='submit' value='SET'></td></form></tr>" ;
   message += "<tr><form method=post action=" + server.uri() + "><td>ADC SI Units</td><td align=center><input type='text' name='allu' value='"+String(ghks.ADC_Unit)+"' size=30 maxlength=5></td><td></td><td><input type='submit' value='SET'></td></form></tr>" ;
@@ -485,6 +468,7 @@ void DisplayEmailSetup() {
   
   message += "<tr><form method=post action=" + server.uri() + "><td>Alarm Delay</td><td align=center><input type='text' name='aldl' value='"+String(ghks.ADC_Alarm_Delay)+"' size=30></td><td>(s)</td><td><input type='submit' value='SET'></td></form></tr>" ;
   message += "<tr><form method=post action=" + server.uri() + "><td title='-1 to disable alarm emails'>Tank Low Alarm Volume</td><td align=center><input type='text' name='lotk' value='"+String(SMTP.LowTankQty)+"' size=30></td><td>(L)</td><td><input type='submit' value='SET'></td></form></tr>" ;
+*/  
   if ( ( SMTP.bSpare ) != 0 ){
     MyCheck = F("CHECKED")  ;    
   }else{

@@ -100,6 +100,11 @@ void handleRoot() {
         tv.iTrackMode = -1 ;
       }
     }        
+    i = String(server.argName(j)).indexOf("tname");
+    if (i != -1){  // have a request to Update Node name
+     String(server.arg(j)).toCharArray( tv.trackername , sizeof(tv.trackername)) ;
+    }
+    
     i = String(server.argName(j)).indexOf("iugps");
     if (i != -1){  // have a request to set the gps usage mode
       tv.iUseGPS = String(server.arg(j)).toInt() ;
@@ -275,7 +280,7 @@ void handleRoot() {
       tv.iOutputType = String(server.arg(j)).toInt() ;
       tv.iOutputType = constrain(tv.iOutputType,0,3);
     }               
-    i = String(server.argName(j)).indexOf("winds");
+/*    i = String(server.argName(j)).indexOf("winds");
     if (i != -1){  // have a request to set the time zone
       tv.iMaxWindSpeed = String(server.arg(j)).toInt() ;
       tv.iMaxWindSpeed = constrain(tv.iMaxWindSpeed,0,32000);
@@ -289,7 +294,7 @@ void handleRoot() {
     if (i != -1){  // have a request to set the time zone
       tv.iMinWindTime = String(server.arg(j)).toInt() ;
       tv.iMinWindTime = constrain(tv.iMinWindTime,0,32000);
-    }            
+    }*/            
     i = String(server.argName(j)).indexOf("parwy");
     if (i != -1){  // have a request to set park angle Y
       tv.dyParkWind = String(server.arg(j)).toFloat() ;
@@ -401,6 +406,9 @@ void handleRoot() {
       break;
       case 5:
          message += F("ALL STOP - Motors Off");          
+      break;
+      case 6:
+         message += F("Dont Track Wind Park Both");          
       break;
     }
   }
@@ -653,16 +661,18 @@ void handleRoot() {
   }
   message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>\r\n");
 
-  message += F("<form method=get action=/><tr><td>Max Wind Speed</td><td align=center><input type='text' name='winds' value='") ; 
+  message += F("<tr><td>Max Wind Speed</td><td align=center>") ; 
   message += String(tv.iMaxWindSpeed);
-  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
-
-  message += F("<form method=get action=/><tr><td>Time above speed to park</td><td align=center><input type='text' name='windt' value='") ; 
+  message += "</td><td>("+String(tv.Wind_Unit)+")</td></tr>\r\n" ; 
+  message += F("<tr><td>Time above speed to park</td><td align=center>") ; 
   message += String(tv.iMaxWindTime);
-  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
-  message += F("<form method=get action=/><tr><td>Time to resume tracking</td><td align=center><input type='text' name='windl' value='") ; 
+  message += F("</td><td>(sec)</td></tr>\r\n") ; 
+  message += F("<tr><td>Min Wind Speed</td><td align=center>") ; 
+  message += String(tv.iMaxWindSpeed);
+  message += "</td><td>("+String(tv.Wind_Unit)+")</td></tr>\r\n" ; 
+  message += F("<tr><td>Time below Min to resume</td><td align=center>") ; 
   message += String(tv.iMinWindTime);
-  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+  message += F("</td><td>(sec)</td></tr>\r\n") ; 
 /*
   message += F("<tr><td>WiFi RSSI</td><td align=center>"));
   message += String(WiFi.RSSI())) ; 
@@ -771,7 +781,7 @@ void handleRoot() {
   message += String(tv.xMaxVal);
   message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>\r\n"); 
 
-  if ( tv.iDayNight == 0 ){  // indicate this is the target source
+  if (( tv.iDayNight == 0 )&& (!bWindPark)) {  // indicate this is the target source
     MyColor = String("bgcolor='yellow'");   
   }else{
     MyColor = String("");   
@@ -781,8 +791,13 @@ void handleRoot() {
   message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='parax' value='") ;
   message += String(tv.dxPark);
   message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>\r\n") ; 
-  
-  message += F("<tr><td>Wind Park Angle</td><td><form method=get action=/><input type='text' name='parwy' value='") ;
+
+  if ( bWindPark ){
+    MyColor = String("bgcolor='yellow'");   
+  }else{
+    MyColor = String("");   
+  }
+  message += "<tr " + MyColor + "><td>Wind Park Angle</td><td><form method=get action=/><input type='text' name='parwy' value='" ;
   message += String(tv.dyParkWind) ;
   message += F("' size=10></td><td><input type='submit' value='SET'></form></td><td><form method=get action=/><input type='text' name='parwx' value='") ;
   message += String(tv.dxParkWind);
@@ -806,7 +821,7 @@ void handleRoot() {
   message += String(tv.xMaxMotorSpeed) ;
   message += F("' size=10></td><td><input type='submit' value='SET'></form></td></tr>\r\n") ; 
 
-  if ( tv.iTrackMode == 3 ){
+  if (( tv.iTrackMode == 3 )&& (!bWindPark)){
     MyColor = String("bgcolor='yellow'");   
     message += "<tr " + MyColor + "><td>Target Angle</td><td><form method=get action=/><input type='text' name='taray' value='";
     message += String(tv.yzTarget);
@@ -833,7 +848,7 @@ void handleRoot() {
   message += String(tv.xzTarget-tv.xzAng);
   message += F("</td><td>(Deg)</td></tr>\r\n") ; 
 
-  if ((tv.iMountType == 1 ) && ( tv.iDayNight == 1 )&& ( tv.iTrackMode != 3 )){  // day and mount type
+  if ((tv.iMountType == 1 ) && ( tv.iDayNight == 1 )&& ( tv.iTrackMode != 3 )&&(!bWindPark)){  // day and mount type
     MyColor = String("bgcolor='yellow'");   
   }else{
     MyColor = String("");   
@@ -844,7 +859,7 @@ void handleRoot() {
   message += String(tv.solar_el_deg) ; 
   message += F("</td><td>(Deg)</td></tr>\r\n");
 
-  if ((tv.iMountType == 0 )&& ( tv.iDayNight == 1 ) &&  ( tv.iTrackMode != 3 )){ // day and mount type
+  if ((tv.iMountType == 0 )&& ( tv.iDayNight == 1 ) &&  ( tv.iTrackMode != 3 )&&(!bWindPark)){ // day and mount type
     MyColor = String("bgcolor='yellow'");   
   }else{
     MyColor = String("");   
@@ -873,9 +888,9 @@ void SendHTTPPageFooter(){
   message += F("<a href='/log'>Data Log Table</a> <a href='/chart'>Chart Log</a><br>\r\n");  
   message += F("<a href='/setup'>WiFi Setup</a><br>\r\n");
   if (!WiFi.isConnected()){
-    snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  
+    snprintf(buff, BUFF_MAX, "%u.%u.%u.%u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  
   }else{
-    snprintf(buff, BUFF_MAX, "%03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
+    snprintf(buff, BUFF_MAX, "%u.%u.%u.%u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
   }
   message += "<br><a href='http://" + String(buff) + "/update'>OTA Firmware Update</a><br>\r\n";  
   message += "<a href='/?reboot=" + String(lRebootCode) + "'>Reboot</a><br>\r\n";    

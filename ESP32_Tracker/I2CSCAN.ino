@@ -32,18 +32,44 @@ int i2cBusCheck() {
 
 String DeviceName(uint8_t address){
   if ((address >= 0x20 )&&(address<=0x2F)){
-    return(String("Port Expander chip"));  
+    return(String("MCP23017 Port Expander chip"));  
   }else{
     switch (address){
+      case 0x38:
+      case 0x39:
+      case 0x3a:
+      case 0x3b:
+      case 0x3e:
+      case 0x3f:
+        return(String("PCF8570 Port Expander chip"));  
+      break;
       case 0x3c:
+      case 0x3d:
         return(String("OLED Display"));
       break;
       case 0x57:
         return(String("EEPROM on RTC Board"));
       break;
       case 0x68:
-        return(String("RTC"));
+        return(String("DS3231 RTC"));
       break;
+      case 0x6a:
+      case 0x6b:
+        return(String("GYRO"));
+      break;
+      case 0x77:
+        return(String("BMP180 Pressure"));
+      break;
+      case 0x19:
+        return(String("Accel"));
+      break;
+      case 0x1D:
+      case 0x1E:
+        return(String("Accel/Mag"));
+      break;
+      case 0x70:
+        return(String("HT16K33 LED Matrix Driver"));
+      break;      
       default:
         return(String("Unknown"));
       break;
@@ -99,15 +125,24 @@ void i2cScan() {
       if (error == 0) {     // device found
         if (bRecord ){
           SMTP.iBusState[address/16] |= ( 0x0001 << (address % 16 )) ;   // device ok        
+          server.sendContent("<td title='" + DeviceName(address) + "' bgcolor='lime'>"+String((address),HEX)+"</td>");
+        }else{
+          if (( SMTP.iBusState[address/16] & ( 0x0001 << (address % 16 ))) != 0 ) {
+            server.sendContent("<td title='" + DeviceName(address) + "' bgcolor='green'>"+String((address),HEX)+"</td>");
+          }else{
+            server.sendContent("<td title='" + DeviceName(address) + " Materialised ??? ' bgcolor='yellow'>"+String((address),HEX)+"</td>");          
+          }
         }
-        server.sendContent("<td title='" + DeviceName(address) + "' bgcolor='lime'>"+String((address),HEX)+"</td>");
-      } else if (error == 4) {
-        // other error
-        server.sendContent("<td title='" + DeviceName(address) + "' bgcolor='red'>XX</td>");
       } else {
-        // error = 2: received NACK on transmit of address
-        // error = 3: received NACK on transmit of data
-        server.sendContent(F("<td align=center>--</td>"));
+        if (( SMTP.iBusState[address/16] & ( 0x0001 << (address % 16 ))) != 0 ) {
+            server.sendContent("<td title='" + DeviceName(address) + " Missing/Faulted ??? ' bgcolor='red'>+String((address),HEX)+</td>");
+        }else{      
+          if (error == 4) {   // other error
+            server.sendContent("<td title='" + DeviceName(address) + "' bgcolor='magenta'>XX</td>");
+          } else {   // error = 2: received NACK on transmit of address....  error = 3: received NACK on transmit of data
+            server.sendContent(F("<td align=center>--</td>"));
+          }
+        }
       }
     } else {
       server.sendContent(F("<td align=center>.</td>"));

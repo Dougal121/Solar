@@ -1,7 +1,7 @@
 unsigned long sendNTPpacket(char* address){
 byte packetBuffer[ NTP_PACKET_SIZE];     //buffer to hold incoming and outgoing packets  
 IPAddress ntpIP ;
-  if (WiFi.isConnected())  {                      
+  if (WiFi.isConnected() && bPower)  {                      
     memset(packetBuffer, 0, NTP_PACKET_SIZE);    // set all bytes in the buffer to 0
     // Initialize values needed to form NTP request
     // (see URL above for details on the packets)

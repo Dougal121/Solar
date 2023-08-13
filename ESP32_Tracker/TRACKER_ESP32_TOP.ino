@@ -1,12 +1,14 @@
-/*  ESP32 Dual Axis Solar Tracker - Circa 2021
+/*  ESP32 Dual Axis Solar Tracker - Circa 2023
  *   
  *  Written/Assembled By Dougal Plummer B.E.
- *  With help and contributions from many people - my thanks to them all.
+ *  With help and contributions from many people - my thanks to them all...
  *  
  *  Feel free to use this code to help save our planet any way you can - GO SOLAR !
  *  Newer copies can be found at https://github.com/Dougal121/Solar/tree/master/ESP32_Tracker
  *      
  *  Compiles for LOLIN D32 @ 80Mhz
+ *  Minimal SPIFFS (Large APPS with OTA)
+ *  
  */
 #include <esp_task_wdt.h>    // part of the ESP stuff from board manager 
 #include <WiFi.h>            // arduino inbuilt 
@@ -28,6 +30,7 @@
 #include "ht16k33.h"         // changed the default constructor (changed copy it in github under libs for this project)
 #include <Update.h>          // arduino inbuilt 
 #include <ESP_Mail_Client.h>
+#include "uEEPROMLib.h"      // SD card lib for the RTC memory logging
 
 #include "SSD1306.h"         // these 3 come from the standard book of spells (arduinoo IDE lib manager)
 //#include "SH1106.h"
@@ -36,11 +39,13 @@
 
 #define BUFF_MAX 32
 
-#include "StaticPages.h"      // part of this project (tab top right) 
+#include "StaticPages.h"            // part of this project (tab top right) 
 
-#define MAX_LOCAL_IO 16    // same a sa relay board
+#define MAX_LOCAL_IO 16             // same a sa relay board
 #define ESP32_BUILTIN_LED 2
 
+#define MIN_REBOOT  720             //   720   12 hours normally      10 min for testing
+const byte MAX_DESCRIPTION = 8 ;
 
 #if defined(ESP32)
 #define MaxPinPort  40
@@ -69,6 +74,8 @@ const byte MAX_WIFI_TRIES = 45 ;
 
 SSD1306 display(0x3c, 5, 4);   // GPIO 5 = D1, GPIO 4 = D2                           onboard 0.96" LOED display as per picture
 //SH1106Wire display(0x3c, 4, 5);   // arse about ??? GPIO 5 = D1, GPIO 4 = D2       external 1.3" OLED display for a D1 R2 etc
+
+uEEPROMLib rtceeprom(0x57);
 
 #define BUFF_MAX 32
 #define PARK_EAST 1
@@ -119,7 +126,8 @@ static bool hasNet = false;
 static bool hasGyro = false;
 static bool hasRTC = false;
 static bool hasPres = false ;
-const int MAX_EEPROM = 1024 ;
+const int MAX_EEPROM = 4096 ;
+const int TV_BASE = 450 ;
 
 char dayarray[8] = {'S','M','T','W','T','F','S','E'} ;
 char Toleo[10] = {"Ver 3.8\0"}  ;
@@ -154,7 +162,9 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   IPAddress IPDNS ;                       // (192,168,0,15)   
   long SelfReBoot ;
   long lRebootTimeDay ;
-  float ADC_Cal_Mul ;
+  long MinRecycleTime ;
+  long RebootInterval ;                   // intervale in minutes between reboots  
+/*  float ADC_Cal_Mul ;
   float ADC_Cal_Ofs ;
   char  ADC_Unit[5] ;                     // units for display
   uint8_t  ADC_Alarm_Mode ;               // high low etc   0x80 Contious enable 0x40 Master Valve Only Enable  0x20  Alram 2 master  0x10 Alarm 1 master     0x02 Alarm 1 high   0x01 Alarm 2 high
@@ -162,7 +172,7 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   float ADC_Alarm2 ;                      // 
   uint16_t  ADC_Alarm_Delay ;             // trigger to alarm in seconds
   uint8_t ADC_Input_PIN1 ;
-  uint8_t ADC_Input_PIN2 ;  
+  uint8_t ADC_Input_PIN2 ;  */
   long    spare[20];                      // padding to use up next time  
 } general_housekeeping_stuff_t ;          // 
 
@@ -262,14 +272,9 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   uint8_t  RELAY_YZ_PWM ;
   uint8_t  RELAY_XZ_DIR ;       
   uint8_t  RELAY_YZ_DIR ;
-  int iTempInputSource ;         //  
-  uint16_t  Temp_Alarm_Delay ;            // trigger to temp alarm in seconds
-  float Temp_Alarm1 ;
-  float Temp_Alarm2 ;                      // 
-  char  Temp_Unit[5] ;                     // units for display
-  uint8_t Temp_Alarm_Mode ;               // high low etc   0x80 Contious enable 0x40 Master Valve Only Enable  0x20  Alram 2 master  0x10 Alarm 1 master     0x02 Alarm 1 high   0x01 Alarm 2 high
-  uint8_t Pos_Alarm_Mode ;                //    0x80 Maaster enable   
-  long  Spare[20] ;                       // padding for next time  
+  int iMinWindSpeed ;         //  
+  char  Wind_Unit[6] ;                     // units for display
+  long  Spare[23] ;                       // padding for next time  
 } tracker_stuff_t ;        // 
 
 tracker_stuff_t   tv   ;    // tracker variables
@@ -298,6 +303,7 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
 Email_App_stuff_t SMTP;
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  char  ADC_Description[MAX_DESCRIPTION] ;   //
   float ADC_Cal_Mul ;                            // 
   float ADC_Cal_Ofs ;                            //
   char  ADC_Unit[6] ;                            // units for display
@@ -312,6 +318,9 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
   float    ADC_Value ;     //
   uint16_t ADC_Delay ;     // trigger to alarm in seconds
   uint8_t  ADC_Action ;    // high low etc  
+  uint8_t  ADC_Do ;        // email, park ... etc    
+  uint16_t ADC_Trigger ;
+  bool     ADC_bSentADCAlarmEmail ;
 } adc_alarm_t ;                                   // 
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
@@ -333,7 +342,8 @@ typedef struct __attribute__((__packed__)) {
   float NSAngle ;             // 24
   float EWTarget ;            // 28
   float NSTarget ;            // 32
-} data_log_t ;                // 8 * 4 bytes  = 32 bytes per log        24 hrs x 12 logs/hr (288)  x 32 bytes = 9216 bytes
+  float ADCValue[ADC_MAX_CHAN] ;  // 4 * 6 = 24 
+} data_log_t ;                // 14 * 4 bytes  = 56 bytes per log        24 hrs x 12 logs/hr (288)  x 32 bytes = 16128 bytes
 data_log_t  DataLog[MAX_LOG] ;
 
 
@@ -350,7 +360,7 @@ float yMag = 0 ;           //
 float zMag = 0 ;           // 
 
 //long lTimeZone ;
-
+bool  bDataLogDirty = false ; 
 long lScanCtr = 0 ;
 long lScanLast = 0 ;
 time_t AutoOff_t ;         // auto off until time > this date
@@ -359,7 +369,9 @@ uint8_t rtc_status ;
 float decl ;
 float eqtime ;
 bool iOutputActive = 0 ;
-
+bool bPower = true ;
+bool bWindPark = false ;
+long iPowerDown = 60 ;
 bool bMagCal = false ;
 bool bDoTimeUpdate = false ;
 long lTimePrev ;
@@ -377,12 +389,12 @@ bool bValveActive = false ;
 float Temp_Value ; 
 long lMinUpTime = 0 ;
 long lRet_Email = 0 ;
-float ADC_Value = 0 ;
+/*float ADC_Value = 0 ;
 int   ADC_Raw = 0 ; 
 int   ADC_Raw1 = 0 ; 
 int   ADC_Raw2 = 0 ;
-bool  bSentADCAlarmEmail = false ;
-long ADC_Trigger = 0 ;
+bool  bSentADCAlarmEmail = false ; 
+long ADC_Trigger = 0 ;  */
 int   iAutoResetStatus = 0 ; 
 time_t NowTime ;
 String strBusResults ;
@@ -390,7 +402,7 @@ long lMinBusScan = 30 ;
 bool bBusGood = true ;
 int magval = 0 ;
 int iBusReturn = 0 ;
-
+long iDisplayCountDown = 0 ;
 WiFiUDP ntpudp;
 //WiFiUDP ctrludp;
 
@@ -539,6 +551,7 @@ String host ;
   server.on("/sensor",handleSensor);
   server.on("/adc",adcLocalMap);
   server.on("/log",datalog1_page);
+  server.on("/log.csv",datalog1_page);
   server.on("/chart",chart1_page);
   server.on("/email",DisplayEmailSetup);
   server.on("/backup", HTTP_GET , handleBackup);
@@ -620,6 +633,7 @@ String host ;
 
   lRebootCode = random(1,+2147483640) ;
   tv.fWindSpeedVel = 0 ;
+  iPowerDown = ghks.displaytimer ;     // makle sure power is on during the day
 }
 
 
@@ -647,7 +661,9 @@ bool bTrigger = false ;
 bool bTriggerLess = false ;
 bool bTriggerMore = false ;
 int iMailMsg = 0 ;
-
+int iHM = 0 ;
+int iRebootTime = 0 ;
+int iDOW = 0  ; 
   server.handleClient();
 //  OTAWebServer.handleClient();
   
@@ -705,7 +721,7 @@ int iMailMsg = 0 ;
 //  }
 //  analogWrite(SCOPE_PIN,pwmtest); 
 
-  delay(1);                  // limmit to 1000 cyclces a second max
+//  delay(1);                  // limmit to 1000 cyclces a second max
   
       
   lScanCtr++ ;
@@ -803,13 +819,65 @@ int iMailMsg = 0 ;
  
 
     display.setTextAlignment(TEXT_ALIGN_CENTER);
-    switch (rtc_sec & 0x03){
+    switch ((rtc_sec >> 1 ) % 10 ){
       case 1:
+        ghks.MyIP =  WiFi.localIP() ;  // update to see if has connection                  
         snprintf(buff, BUFF_MAX, "IP %03u.%03u.%03u.%03u", ghks.MyIP[0],ghks.MyIP[1],ghks.MyIP[2],ghks.MyIP[3]);      
       break;
       case 2:
         snprintf(buff, BUFF_MAX, ">>  IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);            
       break;
+      case 3:
+       snprintf(buff, BUFF_MAX, "%s - %d", ghks.NodeName,ghks.lNodeAddress );   
+      break;
+      case 4:
+       snprintf(buff, BUFF_MAX, "Up Time %d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
+      break;
+      case 5:
+        switch (iAutoResetStatus){
+          case -1: snprintf(buff, BUFF_MAX, "Auto Reboot %d",( ghks.lRebootTimeDay & 0xfff )); break ;
+          case -2: snprintf(buff, BUFF_MAX, "Auto Reboot Today %d",( ghks.lRebootTimeDay & 0xfff )); break ;
+          case -3: snprintf(buff, BUFF_MAX, "REBOOT IN ONE MINUTE"); break ;
+          case 1: snprintf(buff, BUFF_MAX, "Reboot interval %d min", ghks.SelfReBoot ); break ;
+          case 2: snprintf(buff, BUFF_MAX, "Auto Reboot in %d min", (ghks.SelfReBoot - lMinUpTime )); break ;
+          case 3: snprintf(buff, BUFF_MAX, "REBOOT IN ONE MINUTE"); break ;
+          default: snprintf(buff, BUFF_MAX, "Auto Reboot OFF") ; break;
+        }
+      break;
+      case 6:
+        if ( strBusResults.length() == 0 ){
+          snprintf(buff, BUFF_MAX, "--- I2C BUS NORMAL ---" );
+        }else{
+          snprintf(buff, BUFF_MAX, "%s", strBusResults.c_str() );
+        }
+      break;  
+      case 7:
+       snprintf(buff, BUFF_MAX, "%s", tv.trackername );   
+      break;
+
+      case 8:
+        if (tv.iWindInputSource == -1 ){
+          if (bWindPark) {
+             snprintf(buff, BUFF_MAX, "PARK ACTIVE NO SOURCE" );   
+          }else{
+             snprintf(buff, BUFF_MAX, "NO ADC INPUT WIND PARK" );                         
+          }
+        }else{
+          if (bWindPark) {
+             snprintf(buff, BUFF_MAX, "%d WINDPARK ACTIVE %3.1f",tv.iWindInputSource, tv.fWindSpeedVel );   
+          }else{
+             snprintf(buff, BUFF_MAX, "%d Wind Speed %3.1f",tv.iWindInputSource, tv.fWindSpeedVel );   
+          }
+        }
+      break;
+      case 9:
+        if ( gps.satellites() == 255 ){
+          snprintf(buff, BUFF_MAX,"--- No GPS Lock ---") ; 
+        }else{
+          snprintf(buff, BUFF_MAX,"GPS LOCK %d BIRDS" , gps.satellites()) ;           
+        }
+      break;
+
       default:
         snprintf(buff, BUFF_MAX, "%s", ghks.cssid );            
       break;
@@ -843,6 +911,7 @@ int iMailMsg = 0 ;
       }
       if (tv.solar_el_deg >= 0 ){            // day
         tv.iDayNight = 1 ;
+        iPowerDown = ghks.displaytimer ;     // makle sure power is on during the day
       }else{                                 // night
         tv.iDayNight = 0 ;
       }
@@ -850,6 +919,10 @@ int iMailMsg = 0 ;
 
     if (tv.iMountType == 0){         // EQUITORIAL MOUNT
       switch (tv.iTrackMode) {
+        case 6: // both axis to wind park
+          tv.yzTarget = tv.dyParkWind ;  // night park position  E/W
+          tv.xzTarget = tv.dxParkWind ;  // night park position  N/S
+          break ;
         case 4: // both axis to park
           tv.yzTarget = tv.dyPark ;  // night park position  E/W
           tv.xzTarget = tv.dxPark ;  // night park position  N/S
@@ -892,6 +965,10 @@ int iMailMsg = 0 ;
       tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW 
     }else{
       switch (tv.iTrackMode) {      // ALT/AZ MOUNT
+        case 6: // both axis to wind park position
+          tv.yzTarget = AzFix(tv.dyParkWind) ;  // night park position  Az
+          tv.xzTarget = tv.dxParkWind ;  // night park position  Alt
+          break ;
         case 4: // both axis to park
           tv.yzTarget = AzFix(tv.dyPark) ;  // night park position  Az
           tv.xzTarget = tv.dxPark ;  // night park position  Alt
@@ -930,6 +1007,16 @@ int iMailMsg = 0 ;
           }
           break;
       }
+      if (bWindPark) {
+        if (tv.iMountType == 0){         // EQUITORIAL MOUNT
+          tv.xzTarget = tv.dxParkWind ;
+          tv.yzTarget = tv.dyParkWind ;
+        }else{
+          tv.yzTarget = AzFix(tv.dyParkWind) ;  // night park position  Az
+          tv.xzTarget = tv.dxParkWind ;  // night park position  Alt          
+        }
+      }
+      
       tv.xzTarget = constrain(tv.xzTarget,tv.xMinVal,tv.xMaxVal);   // NS / Alt
       tv.yzTarget = constrain(tv.yzTarget,tv.yMinVal,tv.yMaxVal);   // EW / Az   
     }
@@ -952,112 +1039,8 @@ int iMailMsg = 0 ;
       LoadParamsFromEEPROM(true);
       tv.iDoSave = 0 ;  // only do once
     }
-    
-    for ( i = 0 ; i < ADC_MAX_CHAN ; i++ ) {
-      if (( adcs.chan[i].ADC_Input_PIN > 0 ) && (adcs.chan[i].ADC_Input_PIN<40)) {
-        adcs.chan[i].ADC_RAW = analogRead(adcs.chan[i].ADC_Input_PIN) ;
-        adcs.chan[i].ADC_Value = ((adcs.chan[i].ADC_Cal_Mul * (( 1.0 * adcs.chan[i].ADC_RAW ) + adcs.chan[i].ADC_Cal_Ofs ) / 1023 ) )  ;
-      }else{
-        adcs.chan[i].ADC_RAW = 0 ;
-        adcs.chan[i].ADC_Value = 0 ; 
-      }
-    }
-
-    if (ghks.ADC_Input_PIN1 > 0 ){
-      ADC_Raw1 = analogRead(ghks.ADC_Input_PIN1) ;
-    }
-    if (ghks.ADC_Input_PIN2 > 0 ){
-      ADC_Raw2 = analogRead(ghks.ADC_Input_PIN2) ;
-    }
-    ADC_Value = ((ghks.ADC_Cal_Mul * (( 1.0 * ADC_Raw1 ) + ghks.ADC_Cal_Ofs ) / 1023 ) )  ;
-    if (( ghks.ADC_Alarm_Mode & 0x80 ) != 0 ) {
-      bTrigger = false ;
-      bTriggerLess = false ;
-      bTriggerMore = false ;
-      if ((( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ) || ( (( ghks.ADC_Alarm_Mode & 0x02 ) == 0x02 ) && bValveActive ) || ( (( ghks.ADC_Alarm_Mode & 0x04 ) == 0x04 ) && !bValveActive ))  {    // alarm 1 on 
-        if (( ghks.ADC_Alarm_Mode & 0x01 ) != 0 ){ // looking for a high alarm else jump down for a low on
-          if ( ADC_Value > ghks.ADC_Alarm1 ) {     // high alarm test 
-            bTrigger = true ;  
-            bTriggerMore = true ;
-            if (( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ){  // this is the always case
-                iMailMsg = 5 ;              
-            }else{
-              if ( bValveActive ){
-                iMailMsg = 9 ;                 
-              }else{
-                iMailMsg = 13 ;
-              }
-            }
-          }          
-        }else{
-          if ( ADC_Value < ghks.ADC_Alarm1 ) { // low alarm test
-            bTrigger = true ;
-            bTriggerLess = true ;
-            if (( ghks.ADC_Alarm_Mode & 0x06 ) == 0x06  ){   // this is the always case
-                iMailMsg = 7 ;                                
-            }else{
-              if ( bValveActive ){
-                iMailMsg = 11 ;                  
-              }else{
-                iMailMsg = 15 ;                  
-              }
-            }
-          }          
-        }
-      }
-      if ((( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ) || ( (( ghks.ADC_Alarm_Mode & 0x10 ) == 0x10 ) && bValveActive ) || ( (( ghks.ADC_Alarm_Mode & 0x20 ) == 0x20 ) && !bValveActive ))  {    // alarm 2 on 
-        if (( ghks.ADC_Alarm_Mode & 0x08 ) != 0 ){   // looking for a high alarm on number 2 else jump down for the low one
-          if ( ADC_Value > ghks.ADC_Alarm2 ) {       //  check the level
-            bTrigger = true ;      
-            bTriggerMore = true ;
-            if (( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ){  // this is the always active
-                iMailMsg = 6 ;                                
-            }else{
-              if ( bValveActive ){
-                iMailMsg = 10 ;                  
-              }else{
-                iMailMsg = 14 ;                  
-              }
-            }
-          }          
-        }else{
-          if ( ADC_Value < ghks.ADC_Alarm2 ) {        // check the low alarm 
-            bTrigger = true ;
-            bTriggerLess = true ;
-            if (( ghks.ADC_Alarm_Mode & 0x30 ) == 0x30  ){   // this is the always active
-                iMailMsg = 8 ;     // alarm 2 always                           
-            }else{
-              if ( bValveActive ){
-                iMailMsg = 12 ;   // alarm 2 valve on               
-              }else{
-                iMailMsg = 16 ;   // alarm 2 valve off               
-              }
-            }
-          }          
-        }
-      }
-      
-      if ( bTrigger ) {
-        if (!bSentADCAlarmEmail) {
-          ADC_Trigger++ ;           
-        }               
-      }else{
-        ADC_Trigger = 0 ;      
-        iMailMsg = 0 ;
-      }
-      if (ADC_Trigger > ghks.ADC_Alarm_Delay) {
-        if ( !bSentADCAlarmEmail ){
-          if ( iMailMsg != 0 ){
-            SendEmailToClient(iMailMsg) ;
-          }
-          bSentADCAlarmEmail = true ;
-        }  
-      }
-    }else{
-      ADC_Trigger = 0 ;
-      iMailMsg = 0 ;
-      bSentADCAlarmEmail = false ;
-    }
+    ProcessADC();
+    ProcessAlarms();
     
   }else{  // end of theonce per second stuff
     if (WiFi.isConnected()){  // pointless if no wifi
@@ -1105,7 +1088,11 @@ int iMailMsg = 0 ;
     }
     if (hasRTC) {
       tv.T = DS3231_get_treg();
+      if ((minute() == 0 ) && ( hour() == 0 )){
+        WriteDataLogsToEEPROM();                   // write daily data to memory at midnight
+      }
     }
+    
     if (((minute() % 5) == 0 )) { // data logging
       i = (hour() * 12) +  ( minute() / 5 ) ;
       DataLog[i].RecTime = now() ;
@@ -1115,7 +1102,11 @@ int iMailMsg = 0 ;
       DataLog[i].EWAngle = tv.yzAng ;            
       DataLog[i].NSAngle = tv.xzAng ;             
       DataLog[i].EWTarget = tv.yzTarget ;            
-      DataLog[i].NSTarget = tv.xzTarget ;               
+      DataLog[i].NSTarget = tv.xzTarget ;   
+      for ( k = 0 ; k < ADC_MAX_CHAN ; k++ ) {
+        DataLog[i].ADCValue[k] = adcs.chan[k].ADC_Value ;
+      }    
+      bDataLogDirty = true ;             
     }    
     if (( year() < MINYEAR )|| (bDoTimeUpdate)) {  // not the correct time try to fix every minute
       if ( !bConfig ) { // ie we have a network
@@ -1145,6 +1136,80 @@ int iMailMsg = 0 ;
         }
       }
     }    
+    lMinUpTime++ ;
+
+    if (( lMinUpTime == 15 ) && SMTP.bUseEmail ) {
+      SendEmailToClient(-2);                         // email that reboot just occureed  
+    }
+    
+    iAutoResetStatus = 0 ;
+    if (  ghks.SelfReBoot > 0 ) {
+      iAutoResetStatus = 1 ;
+      if ( lMinUpTime > MIN_REBOOT ) {
+        iAutoResetStatus = 2 ;
+        if ( lMinUpTime == ghks.SelfReBoot  ) {
+          iAutoResetStatus = 3 ;
+          if ( SMTP.bUseEmail ){
+            SendEmailToClient(-3);                           // email intention to reboot on minute before you pull the pin
+          }
+        }
+        if ( lMinUpTime > ghks.SelfReBoot ) {
+          IndicateReboot() ;
+        }
+      }
+    }
+    NowTime = now() + 60 ;
+    i = ( hour(NowTime) * 100 ) + minute(NowTime) ;
+    iHM = ( hour() * 100 ) + minute() ;
+    iRebootTime = ghks.lRebootTimeDay & 0xfff ;
+    iDOW = dayOfWeek(now()) ;
+    if (( ghks.lRebootTimeDay & 0x80000 ) != 0 ) {   // enabled and the right day
+      iAutoResetStatus = -1 ;
+      if (( ghks.lRebootTimeDay & ( 0x1000 << ( iDOW - 1))) != 0 )   {
+        iAutoResetStatus = -2 ;
+        if ( lMinUpTime > MIN_REBOOT ) { 
+          if (iRebootTime == 0 ){
+            if ( iHM == 2359 ) {
+              iAutoResetStatus = 3 ;
+              if (SMTP.bUseEmail){
+                SendEmailToClient(-3);                         // email intention to reboot on minute before you pull the pin
+              }
+            }         
+          }else{
+            if (i == iRebootTime ){
+              iAutoResetStatus = -3 ;
+              if (SMTP.bUseEmail){
+                SendEmailToClient(-3);                         // email intention to reboot on minute before you pull the pin
+              }
+            }          
+          }
+          if (iRebootTime == iHM ){
+            IndicateReboot() ;
+          }
+        }
+      }
+    }
+
+    if ( lMinBusScan > 0 ) {
+      lMinBusScan -- ;
+    }
+    if (lMinBusScan == 0 ) {
+      if (SMTP.iBusScanInterval>0) {
+        iBusReturn = i2cBusCheck();
+        if (( iBusReturn != 0 ) && bBusGood ){
+          if ( SMTP.bUseEmail ) {
+            SendEmailToClient(666); 
+          }
+          bBusGood = false ;
+        }
+        if ( SMTP.iBusScanInterval < MINBUSSCANINTERVAL ){
+          lMinBusScan = MINBUSSCANINTERVAL ;          
+        }else{
+          lMinBusScan = SMTP.iBusScanInterval ;          
+        }
+      }
+    }       
+    
     rtc_min = minute() ;
     gps.stats(&gpschars, &goodsent , &failcs );
     gps.f_get_position(&flat, &flon,(long unsigned *) &tv.fixage); // return in degrees
@@ -1166,7 +1231,25 @@ int iMailMsg = 0 ;
     }else{
       tv.iGPSLock = 0 ;   // if no lock loook at internal clock
     }  
-  }
+    if ( ghks.displaytimer > 0 ){  
+      if ( iPowerDown > 0 ){
+        iPowerDown-- ;
+        if ( !bPower ) {
+          setCpuFrequencyMhz(240) ;   
+          StartWiFi() ;
+          bPower = true ;
+        }
+      }else{
+        if ( bPower ) {
+          StopWiFi() ;
+          display.clear() ;
+          display.display() ;  // blank the display
+          SetSelectedSpeed() ;
+          bPower = false ;    // power off
+        }
+      }    
+    }
+  }   // end of the one minute stuff (lots of it)
 
   if ( year() > MINYEAR ){ // dont move if date and time is rubbish
     iSunUp = HrsSolarTime(tv.sunrise) ;
@@ -1208,45 +1291,72 @@ int iMailMsg = 0 ;
     }  
   }  
 
-  snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
-  if ( !bPrevConnectionStatus && WiFi.isConnected() ){
-    Serial.println(String(buff )+ " WiFi Reconnected OK...");  
-    ghks.MyIP =  WiFi.localIP() ;
-  }
-  if (!WiFi.isConnected())  {
-    lTD = (long)lTimeNext-(long) millis() ;
-    if (( abs(lTD)>40000)||(bPrevConnectionStatus)){ // trying to get roll over protection and a 30 second retry
-      lTimeNext = millis() - 1 ;
-/*      Serial.print(millis());
-      Serial.print(" ");
-      Serial.print(lTimeNext);
-      Serial.print(" ");
-      Serial.println(abs(lTD));*/
+
+
+  if ( bPower ) {  // dont try this if no power or wifi
+    snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
+    if ( !bPrevConnectionStatus && WiFi.isConnected() ){
+  //    Serial.println(String(buff )+ " WiFi Reconnected OK...");  
+      ghks.MyIP =  WiFi.localIP() ;
     }
-    bPrevConnectionStatus = false;
-    if ( lTimeNext < millis() ){
-      Serial.println(String(buff )+ " Trying to reconnect WiFi ");
-      WiFi.disconnect(false);
-//      Serial.println("Connecting to WiFi...");
-      WiFi.mode(WIFI_AP_STA);
-      if ( ghks.lNetworkOptions != 0 ) {            // use ixed IP
-        WiFi.config(ghks.IPStatic, ghks.IPGateway, ghks.IPMask, ghks.IPDNS );
+    if (!WiFi.isConnected())  {
+      lTD = (long)lTimeNext-(long) millis() ;
+      if (( abs(lTD)>40000)||(bPrevConnectionStatus)){ // trying to get roll over protection and a 30 second retry
+        lTimeNext = millis() - 1 ;
+  /*      Serial.print(millis());
+        Serial.print(" ");
+        Serial.print(lTimeNext);
+        Serial.print(" ");
+        Serial.println(abs(lTD));*/
       }
-      if ( ghks.npassword[0] == 0 ) {
-        WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point
-      } else {
-        WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
+      bPrevConnectionStatus = false;
+      if ( lTimeNext < millis() ){
+        Serial.println(String(buff )+ " Trying to reconnect WiFi ");
+        WiFi.disconnect(false);
+  //      Serial.println("Connecting to WiFi...");
+        WiFi.mode(WIFI_AP_STA);
+        if ( ghks.lNetworkOptions != 0 ) {            // use ixed IP
+          WiFi.config(ghks.IPStatic, ghks.IPGateway, ghks.IPMask, ghks.IPDNS );
+        }
+        if ( ghks.npassword[0] == 0 ) {
+          WiFi.begin((char*)ghks.nssid);                    // connect to unencrypted access point
+        } else {
+          WiFi.begin((char*)ghks.nssid, (char*)ghks.npassword);  // connect to access point with encryption
+        }
+        lTimeNext = millis() + 30000 ;
       }
-      lTimeNext = millis() + 30000 ;
-    }
+    }else{
+      bPrevConnectionStatus = true ;
+    }    
   }else{
-    bPrevConnectionStatus = true ;
-  }    
+    bPrevConnectionStatus = false ;    
+  }
 //  dnsServer.processNextRequest();
 }   // ####################  BOTTOM OF LOOP  ###########################################
 
 
 
+void SetSelectedSpeed(void){
+  switch(ghks.cpufreq){
+    case 13:
+      setCpuFrequencyMhz(13);
+    break;
+    case 26:
+      setCpuFrequencyMhz(26);
+    break;
+    case 80:
+      setCpuFrequencyMhz(80);
+    break;
+    case 160:
+      setCpuFrequencyMhz(160);
+    break;
+    default:
+      setCpuFrequencyMhz(240);
+    break;    
+  }
+//  Serial.println("CPU commanded " +String(ghks.cpufreq) + " actual " + String(getCpuFrequencyMhz())+ " MHz");
+//  Serial.println("CPU commanded " +String(ghks.cpufreq)+ " MHz");
+}
 
 
 
