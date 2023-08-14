@@ -886,6 +886,9 @@ void SendHTTPPageFooter(){
   message += F("<a href='/email'>Email Setup</a><br>\r\n");  
   message += F("<a href='/adc'>ADC Setup</a><br>\r\n");  
   message += F("<a href='/log'>Data Log Table</a> <a href='/chart'>Chart Log</a><br>\r\n");  
+  if (hasRTC){
+    message += F("<a href='/rtcmem'>Display RTC EEPROM memory</a><br>\r\n");  
+  }
   message += F("<a href='/setup'>WiFi Setup</a><br>\r\n");
   if (!WiFi.isConnected()){
     snprintf(buff, BUFF_MAX, "%u.%u.%u.%u", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);  

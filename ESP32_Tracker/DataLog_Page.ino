@@ -14,6 +14,20 @@ void datalog1_page(){
     if (i != -1){  // 
       bDownLoad = true ;
     } 
+    i = String(server.argName(j)).indexOf("command");
+    if (i != -1){  
+      switch (String(server.arg(j)).toInt()){
+        case 73:  
+          clearDataLog();
+        break;
+        case 74:  
+          WriteDataLogsToEEPROM();
+        break;
+        case 75:  
+          ReadDataLogsFromEEPROM();
+        break;
+      }
+    }
   }
 
   if ( bDownLoad ){ 
@@ -30,11 +44,12 @@ void datalog1_page(){
     }
     message += "\r\n" ;
     server.sendContent(message) ;
+    ii = (hour() * LOG_PER_HOUR) +  ( minute() / (60 / LOG_PER_HOUR ) )+1;    
     for ( i = 0 ; i < MAX_LOG ; i++ ) {
       j = (i + ii ) % MAX_LOG ;
       prev_time = DataLog[j].RecTime ;
       snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
-      message = String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget); 
+      message = String(j) + "," + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget); 
       for ( i = 0 ; i < ADC_MAX_CHAN ; i++ ) {
         message += " ," + String(DataLog[j].ADCValue[i]) ;      
       }
@@ -46,20 +61,20 @@ void datalog1_page(){
   }else{
     SendHTTPHeader();
     message = F("<table border=1 title='Data Log'>\r\n");
-    message += "<tr><th>Date</th><th>Temperature<br>(C)</th><th>Pressure<br>(mBar)</th><th>RSSI<br>(dB)</th><th>E/W Angle<br>(Deg)</th><th>N/S Angle<br>(Deg)</th><th>E/W Target<br>(Deg)</th><th>N/S Target<br>(Deg)</th>";
+    message += "<tr><th>Log No</th><th>Date</th><th>Temperature<br>(C)</th><th>Pressure<br>(mBar)</th><th>RSSI<br>(dB)</th><th>E/W Angle<br>(Deg)</th><th>N/S Angle<br>(Deg)</th><th>E/W Target<br>(Deg)</th><th>N/S Target<br>(Deg)</th>";
     for ( i = 0 ; i < ADC_MAX_CHAN ; i++ ) {
       message += "<th>" + String(adcs.chan[i].ADC_Description) + "<br>(" + String(adcs.chan[i].ADC_Unit) +")</th>" ;      
     }
     message += F( "</tr>\r\n" ) ; 
     server.sendContent(message) ;    
     ii = (hour() * LOG_PER_HOUR) +  ( minute() / (60 / LOG_PER_HOUR ) )+1;
-    prev_time = previousMidnight(now()) - (( MAX_LOG - ii ) * ( 60 / LOG_PER_HOUR ) * 60 );
+//    prev_time = previousMidnight(now()) - (( MAX_LOG - ii ) * ( 60 / LOG_PER_HOUR ) * 60 );
   
     for ( i = 0 ; i < MAX_LOG ; i++ ) {
       j = (i + ii ) % MAX_LOG ;
       prev_time = DataLog[j].RecTime ;
       snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
-        message = "<tr><td>" + String(buff) + "</td><td>" + String(DataLog[j].Temp) + "</td><td>" + String(DataLog[j].Pres) + "</td><td>" + String(DataLog[j].RSSI) + "</td><td>" + String(DataLog[j].EWAngle) + "</td><td>" + String(DataLog[j].NSAngle) + "</td><td>" + String(DataLog[j].EWTarget) + "</td><td>" + String(DataLog[j].NSTarget) + "</td>";
+        message = "<tr><td>"+String(j)+"</td><td>" + String(buff) + "</td><td>" + String(DataLog[j].Temp) + "</td><td>" + String(DataLog[j].Pres) + "</td><td>" + String(DataLog[j].RSSI) + "</td><td>" + String(DataLog[j].EWAngle) + "</td><td>" + String(DataLog[j].NSAngle) + "</td><td>" + String(DataLog[j].EWTarget) + "</td><td>" + String(DataLog[j].NSTarget) + "</td>";
         for ( kk = 0 ; kk < ADC_MAX_CHAN ; kk++ ) {
           message += "<td>" + String(DataLog[j].ADCValue[kk]) + "</td>" ;      
         }        
@@ -69,6 +84,10 @@ void datalog1_page(){
     }
     server.sendContent("<tr><td colspan=8><form method='GET' action=" + server.uri() + ".csv action='' enctype='multipart/form-data'><input type='hidden' name='download' value='doit'><input type='submit' value='Download'></form></td></tr>");
     server.sendContent(F("</table><br>\r\n"));    
+    message = "<a href="+ server.uri() + "?command=73>Clear Logged Data</a><br>";
+    message += "<a href="+ server.uri() + "?command=74>Save Data to RTC EEPROM</a><br>\r\n";
+    message += "<a href="+ server.uri() + "?command=75>Load Data from RTC EEPROM</a><br>\r\n";
+    server.sendContent(message) ;    
     SendHTTPPageFooter();
   }
 }
@@ -148,9 +167,9 @@ void chart1_page(){
   message += F("var chart = new google.visualization.LineChart(document.getElementById('linechart'));\r\n");
   message += F("chart.draw(data, options); } </script>\r\n");
   message += F("<div id='linechart'></div><br>\r\n");                                          //  style='width:1000; height:800'
-  message += "<a href="+ server.uri() + "/chart?command=73>Clear Logged Data</a><br>";
-  message += "<a href="+ server.uri() + "/chart?command=74>Save Data to RTC EEPROM</a><br>\r\n";
-  message += "<a href="+ server.uri() + "/chart?command=75>Load Data from RTC EEPROM</a><br>\r\n";
+  message += "<a href="+ server.uri() + "?command=73>Clear Logged Data</a><br>";
+  message += "<a href="+ server.uri() + "?command=74>Save Data to RTC EEPROM</a><br>\r\n";
+  message += "<a href="+ server.uri() + "?command=75>Load Data from RTC EEPROM</a><br>\r\n";
   server.sendContent(message);
   message = "" ;
   
@@ -159,7 +178,7 @@ void chart1_page(){
 
 void clearDataLog(){
   for ( int i = 0 ; i < MAX_LOG ; i++ ) {
-    DataLog[i].RecTime = previousMidnight(now()) - (( MAX_LOG - i ) * (( 60 / LOG_PER_HOUR ) * 60)) ;           
+    DataLog[i].RecTime = previousMidnight(now()) +  (i*( 60 / LOG_PER_HOUR ) * 60) ;           
     DataLog[i].Temp = 0 ;               
     DataLog[i].Pres = 0 ;               
     DataLog[i].RSSI = 0 ;               
@@ -201,5 +220,217 @@ void WriteDataLogsToEEPROM(void){
     }
   }
   return;  
+}
+
+void DisplayRTCEEPROM() {
+  uint8_t i[32] ;
+  uint16_t ii[16] ;
+  uint32_t iiii[8] ;
+  int j , k ;
+  int r  = 0  ;
+  int b = 0 ;
+  int d = 1 ;
+  int iAddr = 0 ; 
+  int  address = 0 ;
+  int  iLen = 256 ;
+  char buff[10];
+  String message ;
+
+  for (uint8_t j=0; j<server.args(); j++){
+    k = String(server.argName(j)).indexOf("RADIX");
+    if (k != -1){  // have a request to set the time zone
+      r = String(server.arg(j)).toInt() ;
+    }
+    k = String(server.argName(j)).indexOf("ADDR");
+    if (k != -1){  // have a request to set the time zone
+      iAddr = String(server.arg(j)).toInt() ;
+    }
+    k = String(server.argName(j)).indexOf("LEN");
+    if (k != -1){  // have a request to set the time zone
+      iLen = String(server.arg(j)).toInt() ;
+      if ( iLen < 32 ) iLen = 32 ;
+      if ( iLen > 1024 ) iLen = 1024 ;
+      iLen -=  (iLen % 32)  ;
+      iLen += 32 ;
+    }
+    k = String(server.argName(j)).indexOf("BITS");
+    if (k != -1){  // have a request to set the time zone
+      b = String(server.arg(j)).toInt() ;
+      switch(b){
+        case 32:
+          d = 4 ;
+        break;
+        case 16:
+          d = 2 ;
+        break;
+        default:
+          d = 1 ;
+        break;
+      }
+    }
+  }  
+//  SerialOutParams();
+  SendHTTPHeader();
+  if ( hasRTC ){
+    message = "<br><form method=post action=" + server.uri() + ">";
+    message += "Base Address: <input type='text' name='ADDR' value='" + String(iAddr) + "' maxlength=4 size=4>" ;  
+    message += "Len: <input type='text' name='LEN' value='" + String(iLen) + "' maxlength=4 size=4>" ;  
+    message += "Radix: <select name=RADIX>" ;
+    switch(r){
+      case 2:
+        message += F("<option value='2' SELECTED>Binary"); 
+        message += F("<option value='8'>Octal"); 
+        message += F("<option value='10'>Decimal"); 
+        message += F("<option value='16'>Hexadecimal"); 
+        message += F("<option value='1'>ASCII"); 
+      break;
+      case 8:
+        message += F("<option value='2'>Binary"); 
+        message += F("<option value='8' SELECTED>Octal"); 
+        message += F("<option value='10'>Decimal"); 
+        message += F("<option value='16'>Hexadecimal"); 
+        message += F("<option value='1'>ASCII"); 
+      break;
+      case 10:
+        message += F("<option value='2'>Binary"); 
+        message += F("<option value='8'>Octal"); 
+        message += F("<option value='10' SELECTED>Decimal"); 
+        message += F("<option value='16'>Hexadecimal"); 
+        message += F("<option value='1'>ASCII"); 
+      break;
+      case 1:
+        message += F("<option value='2'>Binary"); 
+        message += F("<option value='8'>Octal"); 
+        message += F("<option value='10'>Decimal"); 
+        message += F("<option value='16'>Hexadecimal"); 
+        message += F("<option value='1' SELECTED>ASCII"); 
+      break;
+      default:
+        message += F("<option value='2'>Binary"); 
+        message += F("<option value='8'>Octal"); 
+        message += F("<option value='10'>Decimal"); 
+        message += F("<option value='16' SELECTED>Hexadecimal"); 
+        message += F("<option value='1'>ASCII"); 
+      break;
+    }
+    message += F("</select>");
+    server.sendContent(message);
+    message = F("Bits: <select name=BITS>");
+    switch(b){
+      case 32:
+        message += F("<option value='8'>8 Bit - Byte"); 
+        message += F("<option value='16'>16 Bit - Word"); 
+        message += F("<option value='32' SELECTED>32 Bit - DWord"); 
+      break;
+      case 16:
+        message += F("<option value='8'>8 Bit - Byte"); 
+        message += F("<option value='16' SELECTED>16 Bit - Word"); 
+        message += F("<option value='32'>32 Bit - DWord"); 
+      break;
+      default:
+        message += F("<option value='8' SELECTED>8 Bit - Byte"); 
+        message += F("<option value='16'>16 Bit - Word"); 
+        message += F("<option value='32'>32 Bit - DWord"); 
+      break;
+    }
+    message += F("</select>");
+    server.sendContent(message);
+    message = F("<input type='submit' value='SET'></form><br><table border=1 title='EEPROM Contents'><tr><th>.</th>");
+   // table header
+    for (k = 0; k < 32; k+=d) {
+      message += "<th>"+String(k,HEX)+"</th>";
+    }
+    message += F("</tr>");
+    server.sendContent(message);
+    message = "" ;
+    for (address = 0; address < iLen  ; address+=d ) {
+      if (address % 32 == 0) {
+        message += F("<tr>");  // start the line 
+        message += "<td align=center><b>"+String(((address+iAddr) & 0xFFE0),HEX)+"</b></td>";
+        switch(b){  // read all the data
+          case 16:
+            rtceeprom.eeprom_read(address+iAddr,(byte *)&ii,32);
+          break;
+          case 32:
+            rtceeprom.eeprom_read(address+iAddr,(byte *)&iiii,32);
+          break;
+          default: // byte 8
+            rtceeprom.eeprom_read(address+iAddr,(byte *)&i,32);
+          }  
+      }
+      switch(b){
+        case 16:
+  //        rtceeprom.eeprom_read(address,(byte *)&ii,32);
+          switch(r){
+            case 8:
+              message += "<td>"+String(ii[(address % 32)/2],OCT)+"</td>";
+            break;
+            case 10:
+              message += "<td>"+String(ii[(address % 32)/2],DEC)+"</td>";
+            break;
+            case 2:
+              message += "<td>"+String(ii[(address % 32)/2],BIN)+"</td>";
+            break;
+            default:
+              message += "<td>"+String(ii[(address % 32)/2],HEX)+"</td>";
+            break;
+          }  
+        break;
+        case 32:
+  //        rtceeprom.eeprom_read(address,(byte *)&iiii,4);
+          switch(r){
+            case 8:
+              message += "<td>"+String(iiii[(address % 32)/4],OCT)+"</td>";
+            break;
+            case 10:
+              message += "<td>"+String(iiii[(address % 32)/4],DEC)+"</td>";
+            break;
+            case 2:
+              message += "<td>"+String(iiii[(address % 32)/4],BIN)+"</td>";
+            break;
+            default:
+              message += "<td>"+String(iiii[(address % 32)/4],HEX)+"</td>";
+            break;
+          }  
+        break;
+        default: // byte 8
+  //        rtceeprom.eeprom_read(address,(byte *)&i,32);
+          switch(r){
+            case 8:
+              message += "<td>"+String(i[address % 32],OCT)+"</td>";
+            break;
+            case 10:
+              message += "<td>"+String(i[address % 32],DEC)+"</td>";
+            break;
+            case 2:
+              message += "<td>"+String(i[address % 32],BIN)+"</td>";
+            break;
+            case 1:   //ascii
+              if ( isPrintable(char(i[address % 32])) ){
+                message += "<td>"+String(char(i[address % 32]))+"</td>";
+              }else{
+                message += "<td>-</td>";              
+              }
+            break;
+            default:
+              message += "<td>"+String(i[address % 32],HEX)+"</td>";
+            break;
+          }  
+        break;
+      }
+      if (address % 32 == 31) {
+        message += F("</tr>");
+        server.sendContent(message);
+        message = "" ;
+      }
+      
+    }
+    message += F("</tr></table>");
+    server.sendContent(message);
+  }else{
+    message += F("NO RTC / EEPROM for Valve Logs");
+    server.sendContent(message);
+  }
+  SendHTTPPageFooter() ;
 }
 

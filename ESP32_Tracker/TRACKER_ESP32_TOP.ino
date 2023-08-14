@@ -553,6 +553,7 @@ String host ;
   server.on("/log",datalog1_page);
   server.on("/log.csv",datalog1_page);
   server.on("/chart",chart1_page);
+  server.on("/rtcmem",DisplayRTCEEPROM);
   server.on("/email",DisplayEmailSetup);
   server.on("/backup", HTTP_GET , handleBackup);
   server.on("/backup.txt", HTTP_GET , handleBackup);
@@ -737,7 +738,11 @@ int iDOW = 0  ;
     snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(), month(), day() , hour(), minute(), second());
     display.drawString(0 , 0, String(buff) );
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
-    display.drawString(128 , 0, String(WiFi.RSSI()));
+    if ( bPower ) {
+      display.drawString(128 , 0, String(WiFi.RSSI()));
+    }else{
+      display.drawString(128 , 0, String("-X-"));
+    }
     display.setTextAlignment(TEXT_ALIGN_LEFT);
 //    snprintf(buff, BUFF_MAX, "TX %d TY %d", year(), month() );
     msg = "X  " + String(tv.xzAng,2)  ;
@@ -828,7 +833,12 @@ int iDOW = 0  ;
         snprintf(buff, BUFF_MAX, ">>  IP %03u.%03u.%03u.%03u <<", ghks.MyIPC[0],ghks.MyIPC[1],ghks.MyIPC[2],ghks.MyIPC[3]);            
       break;
       case 3:
-       snprintf(buff, BUFF_MAX, "%s - %d", ghks.NodeName,ghks.lNodeAddress );   
+//       snprintf(buff, BUFF_MAX, "%s - %d", ghks.NodeName,ghks.lNodeAddress );   
+       if ( bPower ) {
+         snprintf(buff, BUFF_MAX, "WiFi ON CPU Freq %d (MHz)", ESP.getCpuFreqMHz() );            
+       }else{
+         snprintf(buff, BUFF_MAX, "WiFi OFF CPU Freq %d (MHz)", ESP.getCpuFreqMHz() );                    
+       }
       break;
       case 4:
        snprintf(buff, BUFF_MAX, "Up Time %d:%02d:%02d",(lMinUpTime/1440),((lMinUpTime/60)%24),(lMinUpTime%60));
@@ -1094,7 +1104,7 @@ int iDOW = 0  ;
     }
     
     if (((minute() % 5) == 0 )) { // data logging
-      i = (hour() * 12) +  ( minute() / 5 ) ;
+      i = (hour() * LOG_PER_HOUR) +  ( minute() / (60 / LOG_PER_HOUR ) ) ;
       DataLog[i].RecTime = now() ;
       DataLog[i].Temp = tv.gT ;               
       DataLog[i].Pres = tv.Pr ;                

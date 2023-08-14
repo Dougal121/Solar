@@ -4,8 +4,13 @@ void DisplayMeatBall() {
   float dx , dy , dt ;
   float dxa , dya ;
 
-  HT.setBrightness(15);
-
+  if (tv.iDayNight == 1){  // try an be a little less bright at night
+    HT.setBrightness(15);
+  } 
+  else{
+    HT.setBrightness(7); 
+  }
+  
 //  if ( tv.xMul > 0 ) {
     dx = tv.xzAng - tv.xzTarget ;    // NS
 //  }else{
@@ -64,29 +69,31 @@ void DisplayMeatBall() {
        break;  
     }
   }
-
-  HT.setLed(MapLedNo(0)); // turn on four courners
-  HT.setLed(MapLedNo(7));
-  HT.setLed(MapLedNo(56));
-  HT.setLed(MapLedNo(63));
-
-
-  //  HT.setLedNow(MapLedNo(tc.sec));
-  if ((iPWM_YZ == 0) && (iPWM_XZ == 0)) {
-    HT.setBlinkRate(HT16K33_DSP_NOBLINK); // not attempting to move
-    if (second() % 2 == 0 ) {
+  
+  if ( bPower ){            // dont turn on anything if in low power mode   
+    HT.setLed(MapLedNo(0)); // turn on four courners
+    HT.setLed(MapLedNo(7));
+    HT.setLed(MapLedNo(56));
+    HT.setLed(MapLedNo(63));
+  
+  
+    //  HT.setLedNow(MapLedNo(tc.sec));
+    if ((iPWM_YZ == 0) && (iPWM_XZ == 0)) {
+      HT.setBlinkRate(HT16K33_DSP_NOBLINK); // not attempting to move
+      if (second() % 2 == 0 ) {
+        HT.setLed(MapLedNo(pos + 0)); // display the meatball
+        HT.setLed(MapLedNo(pos + 9));
+      }else{
+        HT.setLed(MapLedNo(pos + 1));
+        HT.setLed(MapLedNo(pos + 8));
+      }
+    } else {
+      HT.setBlinkRate(HT16K33_DSP_BLINK2HZ); //moving so blink meat ball
       HT.setLed(MapLedNo(pos + 0)); // display the meatball
-      HT.setLed(MapLedNo(pos + 9));
-    }else{
       HT.setLed(MapLedNo(pos + 1));
       HT.setLed(MapLedNo(pos + 8));
+      HT.setLed(MapLedNo(pos + 9));
     }
-  } else {
-    HT.setBlinkRate(HT16K33_DSP_BLINK2HZ); //moving so blink meat ball
-    HT.setLed(MapLedNo(pos + 0)); // display the meatball
-    HT.setLed(MapLedNo(pos + 1));
-    HT.setLed(MapLedNo(pos + 8));
-    HT.setLed(MapLedNo(pos + 9));
   }
   HT.sendLed() ; // update all in one go
 }
