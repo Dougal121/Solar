@@ -135,7 +135,7 @@ void i2cScan() {
         }
       } else {
         if (( SMTP.iBusState[address/16] & ( 0x0001 << (address % 16 ))) != 0 ) {
-            server.sendContent("<td title='" + DeviceName(address) + " Missing/Faulted ??? ' bgcolor='red'>+String((address),HEX)+</td>");
+            server.sendContent("<td title='" + DeviceName(address) + " Missing/Faulted ??? ' bgcolor='red'>"+String((address),HEX)+"</td>");
         }else{      
           if (error == 4) {   // other error
             server.sendContent("<td title='" + DeviceName(address) + "' bgcolor='magenta'>XX</td>");

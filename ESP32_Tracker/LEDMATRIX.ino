@@ -8,7 +8,7 @@ void DisplayMeatBall() {
     HT.setBrightness(15);
   } 
   else{
-    HT.setBrightness(7); 
+    HT.setBrightness(0); 
   }
   
 //  if ( tv.xMul > 0 ) {

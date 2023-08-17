@@ -61,6 +61,11 @@ void handleRoot() {
         break;
         case 668:
         break;
+        case 333:
+          if ((tv.iGPSLock>4) && (tv.fixage > 0 ) && ( tv.fixage < 40000 )) {
+            SetTimeFromGPS();
+          }
+        break;
       }  
     }
     i = String(server.argName(j)).indexOf("reboot");
@@ -256,7 +261,7 @@ void handleRoot() {
     i = String(server.argName(j)).indexOf("tmsrc");
     if (i != -1){  // time source
       tv.iTimeSource = String(server.arg(j)).toInt() ;
-      if (( tv.iTimeSource < 0) || ( tv.iTimeSource > 1 )){
+      if (( tv.iTimeSource < 0) || ( tv.iTimeSource > 3 )){
         tv.iTimeSource = 1 ;
       }
     }            
@@ -652,12 +657,26 @@ void handleRoot() {
 
   message += F("<form method=get action=/><tr><td>Auto Time Updates</td><td align=center>") ; 
   message += F("<select name='tmsrc'>");
-  if (tv.iTimeSource == 0 ){
-    message += F("<option value='0' SELECTED>0 Update From RTC every Hour"); 
-    message += F("<option value='1'>1 Update from NTP Every 24 Hrs"); 
-  }else{
-    message += F("<option value='0'>0 Update From RTC every Hour"); 
-    message += F("<option value='1' SELECTED>1 Update from NTP Every 24 Hrs"); 
+  for (ii = 0; ii < 4; ii++) {
+    if (tv.iTimeSource == ii ){
+      MyColor = F(" SELECTED ");
+    }else{
+      MyColor = "";            
+    }
+    switch (ii){
+      case 0:
+        message += "<option value='0' " + MyColor + ">0 Update From RTC every Hour"; 
+      break;
+      case 1:
+        message += "<option value='1' " + MyColor + ">1 Update from NTP Every 24 Hrs"; 
+      break;
+      case 2:
+        message += "<option value='2' " + MyColor + ">2 Update from GPS every hour"; 
+      break;
+      case 3:
+        message += "<option value='3' " + MyColor + ">3 Arrgh let her drift"; 
+      break;
+    }
   }
   message += F("</select></td><td><input type='submit' value='SET'></td></tr></form>\r\n");
 
@@ -738,7 +757,7 @@ void handleRoot() {
   message += F("</td><td>(C)</td></tr>\r\n") ;
 
   message += F("<tr><td>Pressue</td><td align=center>");
-  message += String(tv.Pr) ; 
+  message += String(tv.Pr,1) ; 
   message += F("</td><td>(mBar)</td></tr>\r\n") ;
   
   message += F("<tr><td>Heading (Az)</td><td align=center>") ;
@@ -879,7 +898,7 @@ void handleRoot() {
 
 void SendHTTPPageFooter(){
   String message = F("<br><br><a href='/?command=1'>Load Parameters from EEPROM</a><br><br><a href='/?command=667'>Reset Memory to Factory Default</a><br>\r\n");
-  message += F("<a href='/?command=665'>Sync UTP Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>\r\n") ;
+  message += F("<a href='/?command=665'>Sync NTP Time</a> <a href='/?command=333'>Load GPS Time</a><br><a href='/stime'>Manual Time Set</a><br><a href='/scan'>I2C Scan</a><br>\r\n") ;
   message += F("<a href='/eeprom'>EEPROM Memory Contents</a><br>\r\n");
   message += F("<a href='/sensor'>Sensor Calibration</a><br>\r\n");
   message += F("<a href='/info'>Node Infomation</a><br>\r\n");

@@ -25,7 +25,10 @@
 #include <stdio.h>           // arduino inbuilt 
 #include <LSM303.h>              
 #include <L3G.h>
-#include <SFE_BMP180.h>      // Sparkfun github
+
+//#include <SFE_BMP180.h>      // Sparkfun github
+#include <Adafruit_BMP085.h>  // BMP180
+
 #include <TinyGPS.h>            
 #include "ht16k33.h"         // changed the default constructor (changed copy it in github under libs for this project)
 #include <Update.h>          // arduino inbuilt 
@@ -194,9 +197,10 @@ float rtc_temp ;
 L3G gyro;
 LSM303 compass;
 LSM303::vector<int16_t> running_min = {32767, 32767, 32767}, running_max = {-32768, -32768, -32768};
-SFE_BMP180 pressure;
+//SFE_BMP180 pressure;
 TinyGPS gps;
 HT16K33 HT;
+Adafruit_BMP085 bmp;
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
   int iUseGPS ;
@@ -470,10 +474,15 @@ String host ;
     gyro.enableDefault();
     hasGyro = true ;
   }
-  if (pressure.begin()){
+/*  if (pressure.begin()){
+    Serial.println("BMP180 init success");
+    hasPres = true ;
+  }*/      
+  if (bmp.begin()){
     Serial.println("BMP180 init success");
     hasPres = true ;
   }      
+  
 //  pinMode(FACTORY_RESET,INPUT_PULLUP);
   pinMode(tv.RELAY_XZ_DIR, OUTPUT); // Outputs for PWM motor control or relays
   pinMode(tv.RELAY_XZ_PWM, OUTPUT); // 
@@ -617,6 +626,7 @@ String host ;
     Serial.println("Has RTC ?");
     rtc_temp = DS3231_get_treg(); 
     DS3231_get(&tv.tb);
+    ReadDataLogsFromEEPROM();
   }
   rtc_min = minute();
   rtc_sec = second();
@@ -731,7 +741,10 @@ int iDOW = 0  ;
     lScanLast = lScanCtr;
 //    digitalWrite(LED,!digitalRead(LED));  // my scope says we are doing this loop at an unreasonable speed except when we do web stuff
     rtc_sec = second() ;
-
+    if (hasPres){
+        tv.gT = bmp.readTemperature()  ;
+        tv.Pr = bmp.readPressure() / 100  ;
+    }
     display.clear();
 //      display.drawLine(minRow, 63, maxRow, 63);
     display.setTextAlignment(TEXT_ALIGN_LEFT);
@@ -1068,34 +1081,42 @@ int iDOW = 0  ;
   }
 
   if (rtc_hour != hour()){
-    if ( tv.iTimeSource == 0 ){ // just use the RTC
-      if ( hasRTC ){
-        DS3231_get(&tv.tc);
-        setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
-      }       
-    }else{                     // Use NTP once a day  
-      if ( !bConfig ) {        // ie we have a network
-        if ( hour() == 0 ){    // once a day do this at midnight
-          sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour
-        }
-        if (( hour() == 23 ) && ( hasRTC )){    // once a day do this before midnight
-          DS3231_get(&tv.tc);
-          setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the chip internal RTC from the external one
-        }
-      }else{
+    switch(tv.iTimeSource){
+      case 0:  // RTC
         if ( hasRTC ){
           DS3231_get(&tv.tc);
           setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
+        }       
+      break;
+      case 1: // NTP
+        if ( !bConfig ) {        // ie we have a network
+          if ( hour() == 0 ){    // once a day do this at midnight
+            sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  once and hour
+          }
+          if (( hour() == 23 ) && ( hasRTC )){    // once a day do this before midnight
+            DS3231_get(&tv.tc);
+            setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the chip internal RTC from the external one
+          }
+        }else{
+          if ( hasRTC ){
+            DS3231_get(&tv.tc);
+            setTime((int)tv.tc.hour,(int)tv.tc.min,(int)tv.tc.sec,(int)tv.tc.mday,(int)tv.tc.mon,(int)tv.tc.year ) ; // set the internal RTC
+          }
+        }     
+      break;
+      case 2:
+        if ((tv.iGPSLock>4) && (tv.fixage > 0 ) && ( tv.fixage < 40000 )) {
+          SetTimeFromGPS();
         }
-      }     
+      break;
+      case 3:  //  left the clock drift
+      break;
     }
     rtc_hour = hour(); 
   }
   if ( rtc_min != minute()){
     lMinUpTime++ ;    
-    if (hasPres){
-      tv.Pr = getPressure((float *)&tv.gT) ;
-    }
+
     if (hasRTC) {
       tv.T = DS3231_get_treg();
       if ((minute() == 0 ) && ( hour() == 0 )){

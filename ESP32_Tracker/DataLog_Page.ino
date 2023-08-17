@@ -21,6 +21,7 @@ void datalog1_page(){
           clearDataLog();
         break;
         case 74:  
+          bDataLogDirty = true ;
           WriteDataLogsToEEPROM();
         break;
         case 75:  
@@ -48,13 +49,15 @@ void datalog1_page(){
     for ( i = 0 ; i < MAX_LOG ; i++ ) {
       j = (i + ii ) % MAX_LOG ;
       prev_time = DataLog[j].RecTime ;
-      snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
-      message = String(j) + "," + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget); 
-      for ( i = 0 ; i < ADC_MAX_CHAN ; i++ ) {
-        message += " ," + String(DataLog[j].ADCValue[i]) ;      
+      if (prev_time != 0 ){
+        snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
+        message = String(j) + "," + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget); 
+        for ( i = 0 ; i < ADC_MAX_CHAN ; i++ ) {
+          message += " ," + String(DataLog[j].ADCValue[i]) ;      
+        }
+        message += "\r\n" ;
+        server.sendContent(message) ;
       }
-      message += "\r\n" ;
-      server.sendContent(message) ;
     }
     message += "\r\n\r\n" ;
     server.sendContent(message) ;    
@@ -73,16 +76,18 @@ void datalog1_page(){
     for ( i = 0 ; i < MAX_LOG ; i++ ) {
       j = (i + ii ) % MAX_LOG ;
       prev_time = DataLog[j].RecTime ;
-      snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
+      if (prev_time != 0 ){
+        snprintf(buff, BUFF_MAX, "%d/%02d/%02d %02d:%02d:%02d", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
         message = "<tr><td>"+String(j)+"</td><td>" + String(buff) + "</td><td>" + String(DataLog[j].Temp) + "</td><td>" + String(DataLog[j].Pres) + "</td><td>" + String(DataLog[j].RSSI) + "</td><td>" + String(DataLog[j].EWAngle) + "</td><td>" + String(DataLog[j].NSAngle) + "</td><td>" + String(DataLog[j].EWTarget) + "</td><td>" + String(DataLog[j].NSTarget) + "</td>";
         for ( kk = 0 ; kk < ADC_MAX_CHAN ; kk++ ) {
           message += "<td>" + String(DataLog[j].ADCValue[kk]) + "</td>" ;      
         }        
         message += F( "</tr>\r\n" ) ; 
         server.sendContent(message) ;    
-      prev_time += ((60/LOG_PER_HOUR) * 60 ) ;
+      }
+//      prev_time += ((60/LOG_PER_HOUR) * 60 ) ;
     }
-    server.sendContent("<tr><td colspan=8><form method='GET' action=" + server.uri() + ".csv action='' enctype='multipart/form-data'><input type='hidden' name='download' value='doit'><input type='submit' value='Download'></form></td></tr>");
+    server.sendContent("<tr><td colspan=15><form method='GET' action=" + server.uri() + ".csv action='' enctype='multipart/form-data'><input type='hidden' name='download' value='doit'><input type='submit' value='Download'></form></td></tr>");
     server.sendContent(F("</table><br>\r\n"));    
     message = "<a href="+ server.uri() + "?command=73>Clear Logged Data</a><br>";
     message += "<a href="+ server.uri() + "?command=74>Save Data to RTC EEPROM</a><br>\r\n";
@@ -104,6 +109,7 @@ void chart1_page(){
   String MyColor2 ;
   byte mac[6];
   time_t prev_time;
+  time_t min_start;
 
   for (uint8_t j=0; j<server.args(); j++){
     i = String(server.argName(j)).indexOf("command");
@@ -113,6 +119,7 @@ void chart1_page(){
           clearDataLog();
         break;
         case 74:  
+          bDataLogDirty = true ;
           WriteDataLogsToEEPROM();
         break;
         case 75:  
@@ -138,23 +145,25 @@ void chart1_page(){
   message = "" ;
 
   ii = (hour() * LOG_PER_HOUR) +  ( minute() / (60 / LOG_PER_HOUR ) )+1;
-  prev_time = previousMidnight(now()) - (( MAX_LOG - ii ) * (60 / LOG_PER_HOUR ) * 60 );
+//  prev_night = previousMidnight(now()) ; // - (( MAX_LOG - ii ) * (60 / LOG_PER_HOUR ) * 60 );
+  min_start = now() - ( 24 * 3600 ) ;
   
-  for ( i = 0 ; i < MAX_LOG ; i++ ) {
+  for ( k = i = 0 ; i < MAX_LOG ; i++ ) {
     j = (i + ii ) % MAX_LOG ;
-    prev_time = DataLog[j].RecTime ;
-    snprintf(buff, BUFF_MAX, "new Date(\'%4d-%02d-%02dT%02d:%02d:%02d\')", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
-    if ( !isnan(DataLog[j].Temp)){
-      message += "[ " + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget)  ; 
-      for ( kk = 0 ; kk < ADC_MAX_CHAN ; kk++ ) {
-        message += "," + String(DataLog[j].ADCValue[kk]) ;
+    if (( min_start < DataLog[j].RecTime ) && (DataLog[j].RecTime < now())){
+      prev_time = DataLog[j].RecTime ;
+      snprintf(buff, BUFF_MAX, "new Date(\'%4d-%02d-%02dT%02d:%02d:%02d\')", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
+      if ( !isnan(DataLog[j].Temp)){
+        message += "[ " + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget)  ; 
+        for ( kk = 0 ; kk < ADC_MAX_CHAN ; kk++ ) {
+          message += "," + String(DataLog[j].ADCValue[kk]) ;
+        }
+        message += F( " ] ,\r\n" ) ;    
       }
-      message += F( " ] ,\r\n" ) ;    
-    }
-    prev_time += (( 60 / LOG_PER_HOUR ) * 60 );
-    if (( i % 10) == 9 ){
-      server.sendContent(message);
-      message = "" ;      
+      if (( k++ % 10) == 9 ){
+        server.sendContent(message);
+        message = "" ;      
+      }
     }
   }
   message += F("]);\r\n");
@@ -196,7 +205,7 @@ void clearDataLog(){
 void ReadDataLogsFromEEPROM(void){
   long lStart = millis();
   if ( hasRTC ){
-    rtceeprom.eeprom_read(0,(byte *)&DataLog,sizeof(DataLog)) ; // read in each block
+    rtceeprom.eeprom_read(0,(byte *)&DataLog,4096) ; // read in each block
     snprintf(buff, BUFF_MAX, "%02d/%02d/%04d", day(), month(), year() );     
     Serial.println(String(buff) + " RTC EEPROM Read Time " + String((millis()-lStart)/1000,3) + " (s)");
     bDataLogDirty = false ; 
@@ -208,7 +217,7 @@ void ReadDataLogsFromEEPROM(void){
 void WriteDataLogsToEEPROM(void){
   long lStart = millis();
   if ( hasRTC && bDataLogDirty ){
-    rtceeprom.eeprom_write(0,(byte *)&DataLog,sizeof(DataLog)) ; // write blocks
+    rtceeprom.eeprom_write(0,(byte *)&DataLog,4096) ; // write blocks
     snprintf(buff, BUFF_MAX, "%02d/%02d/%04d", day(), month(), year() );     
     Serial.println(String(buff) + " RTC EEPROM Write Time " + String((millis()-lStart)/1000,3) + " (s)");
     bDataLogDirty = false ; 
@@ -223,9 +232,9 @@ void WriteDataLogsToEEPROM(void){
 }
 
 void DisplayRTCEEPROM() {
-  uint8_t i[32] ;
-  uint16_t ii[16] ;
-  uint32_t iiii[8] ;
+  uint8_t i[56] ;
+  uint16_t ii[28] ;
+  uint32_t iiii[14] ;
   int j , k ;
   int r  = 0  ;
   int b = 0 ;
@@ -337,39 +346,39 @@ void DisplayRTCEEPROM() {
     server.sendContent(message);
     message = F("<input type='submit' value='SET'></form><br><table border=1 title='EEPROM Contents'><tr><th>.</th>");
    // table header
-    for (k = 0; k < 32; k+=d) {
+    for (k = 0; k < 56; k+=d) {
       message += "<th>"+String(k,HEX)+"</th>";
     }
     message += F("</tr>");
     server.sendContent(message);
     message = "" ;
     for (address = 0; address < iLen  ; address+=d ) {
-      if (address % 32 == 0) {
+      if (address % 56 == 0) {
         message += F("<tr>");  // start the line 
         message += "<td align=center><b>"+String(((address+iAddr) & 0xFFE0),HEX)+"</b></td>";
         switch(b){  // read all the data
           case 16:
-            rtceeprom.eeprom_read(address+iAddr,(byte *)&ii,32);
+            rtceeprom.eeprom_read(address+iAddr,(byte *)&ii,56);
           break;
           case 32:
-            rtceeprom.eeprom_read(address+iAddr,(byte *)&iiii,32);
+            rtceeprom.eeprom_read(address+iAddr,(byte *)&iiii,56);
           break;
           default: // byte 8
-            rtceeprom.eeprom_read(address+iAddr,(byte *)&i,32);
+            rtceeprom.eeprom_read(address+iAddr,(byte *)&i,56);
           }  
       }
       switch(b){
         case 16:
-  //        rtceeprom.eeprom_read(address,(byte *)&ii,32);
+  //        rtceeprom.eeprom_read(address,(byte *)&ii,56);
           switch(r){
             case 8:
-              message += "<td>"+String(ii[(address % 32)/2],OCT)+"</td>";
+              message += "<td>"+String(ii[(address % 56)/2],OCT)+"</td>";
             break;
             case 10:
-              message += "<td>"+String(ii[(address % 32)/2],DEC)+"</td>";
+              message += "<td>"+String(ii[(address % 56)/2],DEC)+"</td>";
             break;
             case 2:
-              message += "<td>"+String(ii[(address % 32)/2],BIN)+"</td>";
+              message += "<td>"+String(ii[(address % 56)/2],BIN)+"</td>";
             break;
             default:
               message += "<td>"+String(ii[(address % 32)/2],HEX)+"</td>";
@@ -380,45 +389,45 @@ void DisplayRTCEEPROM() {
   //        rtceeprom.eeprom_read(address,(byte *)&iiii,4);
           switch(r){
             case 8:
-              message += "<td>"+String(iiii[(address % 32)/4],OCT)+"</td>";
+              message += "<td>"+String(iiii[(address % 56)/4],OCT)+"</td>";
             break;
             case 10:
-              message += "<td>"+String(iiii[(address % 32)/4],DEC)+"</td>";
+              message += "<td>"+String(iiii[(address % 56)/4],DEC)+"</td>";
             break;
             case 2:
-              message += "<td>"+String(iiii[(address % 32)/4],BIN)+"</td>";
+              message += "<td>"+String(iiii[(address % 56)/4],BIN)+"</td>";
             break;
             default:
-              message += "<td>"+String(iiii[(address % 32)/4],HEX)+"</td>";
+              message += "<td>"+String(iiii[(address % 56)/4],HEX)+"</td>";
             break;
           }  
         break;
         default: // byte 8
-  //        rtceeprom.eeprom_read(address,(byte *)&i,32);
+  //        rtceeprom.eeprom_read(address,(byte *)&i,56);
           switch(r){
             case 8:
-              message += "<td>"+String(i[address % 32],OCT)+"</td>";
+              message += "<td>"+String(i[address % 56],OCT)+"</td>";
             break;
             case 10:
-              message += "<td>"+String(i[address % 32],DEC)+"</td>";
+              message += "<td>"+String(i[address % 56],DEC)+"</td>";
             break;
             case 2:
-              message += "<td>"+String(i[address % 32],BIN)+"</td>";
+              message += "<td>"+String(i[address % 56],BIN)+"</td>";
             break;
             case 1:   //ascii
-              if ( isPrintable(char(i[address % 32])) ){
-                message += "<td>"+String(char(i[address % 32]))+"</td>";
+              if ( isPrintable(char(i[address % 56])) ){
+                message += "<td>"+String(char(i[address % 56]))+"</td>";
               }else{
                 message += "<td>-</td>";              
               }
             break;
             default:
-              message += "<td>"+String(i[address % 32],HEX)+"</td>";
+              message += "<td>"+String(i[address % 56],HEX)+"</td>";
             break;
           }  
         break;
       }
-      if (address % 32 == 31) {
+      if (address % 56 == 55) {
         message += F("</tr>");
         server.sendContent(message);
         message = "" ;

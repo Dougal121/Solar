@@ -45,6 +45,7 @@ void handleInfo(){
   server.sendContent("<tr><td>tv Structure Size</td><td align=center>"+String(sizeof(tv))+"</td><td>(bytes)</td></tr>" ) ;
   server.sendContent("<tr><td>SMTP Structure Size</td><td align=center>"+String(sizeof(SMTP))+"</td><td>(bytes)</td></tr>" ) ;
   server.sendContent("<tr><td>adcs Structure Size</td><td align=center>"+String(sizeof(adcs))+"</td><td>(bytes)</td></tr>" ) ;
+  server.sendContent("<tr><td>DataLog Structure Size</td><td align=center>"+String(sizeof(DataLog))+"</td><td>(bytes)</td></tr>" ) ;
 
   server.sendContent(F("</table><br>"));    
   SendHTTPPageFooter();

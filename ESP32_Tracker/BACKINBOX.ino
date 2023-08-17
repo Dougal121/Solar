@@ -115,6 +115,8 @@ void BackInTheBoxMemory(){
   
   ResetSMTPInfo();
   ResetADCCalInfo();  
+  clearDataLog();
+  WriteDataLogsToEEPROM();
 }
 
 
@@ -194,7 +196,6 @@ int eeAddress ;
       adcs.alarm[j].ADC_Trigger = 0 ; 
       adcs.alarm[j].ADC_bSentADCAlarmEmail = false ;      // high low etc  
     }
-    ReadDataLogsFromEEPROM();
   
   }else{
     eeAddress = 0 ;
