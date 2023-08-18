@@ -57,12 +57,15 @@ void DisplayMeatBall() {
   pos = 27 ; // netral position
   pos += (y * 8) ; // add or sumtract the x in range of -3 to +3
   pos += (x ) ; // add or sumtract 8 * y or y in range of -3 to +3
-  for (led = 0; led < 63; led++) {
+  for (led = 0; led <= 63; led++) {
     switch (led){
        case 0:
        case 7:
        case 56:
        case 63:
+        if ( !bPower ){ 
+          HT.clearLed(MapLedNo(led));         
+        }
        break;
        default:
          HT.clearLed(MapLedNo(led));
@@ -70,29 +73,29 @@ void DisplayMeatBall() {
     }
   }
   
-  if ( bPower ){            // dont turn on anything if in low power mode   
+  if ( bPower ){            // dont turn on anything if in low power mode 
     HT.setLed(MapLedNo(0)); // turn on four courners
     HT.setLed(MapLedNo(7));
     HT.setLed(MapLedNo(56));
     HT.setLed(MapLedNo(63));
-  
-  
-    //  HT.setLedNow(MapLedNo(tc.sec));
-    if ((iPWM_YZ == 0) && (iPWM_XZ == 0)) {
-      HT.setBlinkRate(HT16K33_DSP_NOBLINK); // not attempting to move
-      if (second() % 2 == 0 ) {
+    if (iOutputActive != 0) {  // only show if motion on
+      //  HT.setLedNow(MapLedNo(tc.sec));
+      if ((iPWM_YZ == 0) && (iPWM_XZ == 0)) {
+        HT.setBlinkRate(HT16K33_DSP_NOBLINK); // not attempting to move
+        if (second() % 2 == 0 ) {
+          HT.setLed(MapLedNo(pos + 0)); // display the meatball
+          HT.setLed(MapLedNo(pos + 9));
+        }else{
+          HT.setLed(MapLedNo(pos + 1));
+          HT.setLed(MapLedNo(pos + 8));
+        }
+      } else {
+        HT.setBlinkRate(HT16K33_DSP_BLINK2HZ); //moving so blink meat ball
         HT.setLed(MapLedNo(pos + 0)); // display the meatball
-        HT.setLed(MapLedNo(pos + 9));
-      }else{
         HT.setLed(MapLedNo(pos + 1));
         HT.setLed(MapLedNo(pos + 8));
+        HT.setLed(MapLedNo(pos + 9));
       }
-    } else {
-      HT.setBlinkRate(HT16K33_DSP_BLINK2HZ); //moving so blink meat ball
-      HT.setLed(MapLedNo(pos + 0)); // display the meatball
-      HT.setLed(MapLedNo(pos + 1));
-      HT.setLed(MapLedNo(pos + 8));
-      HT.setLed(MapLedNo(pos + 9));
     }
   }
   HT.sendLed() ; // update all in one go

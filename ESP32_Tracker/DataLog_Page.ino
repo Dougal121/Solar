@@ -185,6 +185,25 @@ void chart1_page(){
   SendHTTPPageFooter();
 }
 
+void DoDataLog(){
+  int i , k ;
+  if (((minute() % 5) == 0 )) { // data logging
+    i = (hour() * LOG_PER_HOUR) +  ( minute() / (60 / LOG_PER_HOUR ) ) ;
+    DataLog[i].RecTime = now() ;
+    DataLog[i].Temp = tv.gT ;               
+    DataLog[i].Pres = tv.Pr ;                
+    DataLog[i].RSSI = WiFi.RSSI() ;               
+    DataLog[i].EWAngle = tv.yzAng ;            
+    DataLog[i].NSAngle = tv.xzAng ;             
+    DataLog[i].EWTarget = tv.yzTarget ;            
+    DataLog[i].NSTarget = tv.xzTarget ;   
+    for ( k = 0 ; k < ADC_MAX_CHAN ; k++ ) {
+      DataLog[i].ADCValue[k] = adcs.chan[k].ADC_Value ;
+    }    
+    bDataLogDirty = true ;             
+  }      
+}
+
 void clearDataLog(){
   for ( int i = 0 ; i < MAX_LOG ; i++ ) {
     DataLog[i].RecTime = previousMidnight(now()) +  (i*( 60 / LOG_PER_HOUR ) * 60) ;           

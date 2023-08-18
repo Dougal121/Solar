@@ -909,7 +909,12 @@ int iDOW = 0  ;
 
     display.display();
     if (( rtc_sec > 8 ) && ( rtc_sec < 58 )) {  // dont calculate arround the minute when time is updating from NTP or GPS as might get a not so funny result
-      digitalWrite(LED,!digitalRead(LED));
+      if (  bPower ){             // once a second change    
+        digitalWrite(LED,!digitalRead(LED));
+      }else{
+        if ((rtc_sec % 2) == 0 )  // flash at half speed if at low power
+          digitalWrite(LED,!digitalRead(LED));
+      }
       tv.tc.year = year();   // get the time into the structure
       tv.tc.mon = month() ;
       tv.tc.mday = day();
@@ -937,6 +942,9 @@ int iDOW = 0  ;
         iPowerDown = ghks.displaytimer ;     // makle sure power is on during the day
       }else{                                 // night
         tv.iDayNight = 0 ;
+        if (tv.zAng < 0){                      // remove this code for final version  
+          iPowerDown = ghks.displaytimer ;     // if its being bench tested the flip it over to power up again        
+        }
       }
     }
 
@@ -1064,6 +1072,7 @@ int iDOW = 0  ;
     }
     ProcessADC();
     ProcessAlarms();
+    DoDataLog();
     
   }else{  // end of theonce per second stuff
     if (WiFi.isConnected()){  // pointless if no wifi
@@ -1123,22 +1132,8 @@ int iDOW = 0  ;
         WriteDataLogsToEEPROM();                   // write daily data to memory at midnight
       }
     }
-    
-    if (((minute() % 5) == 0 )) { // data logging
-      i = (hour() * LOG_PER_HOUR) +  ( minute() / (60 / LOG_PER_HOUR ) ) ;
-      DataLog[i].RecTime = now() ;
-      DataLog[i].Temp = tv.gT ;               
-      DataLog[i].Pres = tv.Pr ;                
-      DataLog[i].RSSI = WiFi.RSSI() ;               
-      DataLog[i].EWAngle = tv.yzAng ;            
-      DataLog[i].NSAngle = tv.xzAng ;             
-      DataLog[i].EWTarget = tv.yzTarget ;            
-      DataLog[i].NSTarget = tv.xzTarget ;   
-      for ( k = 0 ; k < ADC_MAX_CHAN ; k++ ) {
-        DataLog[i].ADCValue[k] = adcs.chan[k].ADC_Value ;
-      }    
-      bDataLogDirty = true ;             
-    }    
+
+
     if (( year() < MINYEAR )|| (bDoTimeUpdate)) {  // not the correct time try to fix every minute
       if ( !bConfig ) { // ie we have a network
         sendNTPpacket(ghks.timeServer); // send an NTP packet to a time server  
