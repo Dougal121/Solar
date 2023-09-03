@@ -328,6 +328,23 @@ typedef struct __attribute__((__packed__)) {     // eeprom stuff
 } adc_alarm_t ;                                   // 
 
 typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  uint32_t Color ;
+  uint8_t  Display ;    // 0 or 1 for on and off 
+  uint8_t  Axis ;       // 0 or 1      left right
+} chart_trace_t ;                                   // 
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
+  chart_trace_t trace[ADC_MAX_CHAN+7]   ;
+  float  YMax[2] ;    
+  float  YMin[2] ;      
+  time_t  XMax ;    
+  time_t  XMin ;  
+  uint32_t BGColor ;    
+} chart_display_t ;                                   // 
+
+chart_display_t chart ;
+
+typedef struct __attribute__((__packed__)) {     // eeprom stuff
   adc_chan_t chan[ADC_MAX_CHAN];
   adc_alarm_t alarm[ADC_MAX_ALARM] ;
 } adc_stuff_t ;          // 
@@ -1261,6 +1278,7 @@ int iDOW = 0  ;
       if ( iPowerDown > 0 ){
         iPowerDown-- ;
         if ( !bPower ) {
+          WriteDataLogsToEEPROM();
           setCpuFrequencyMhz(240) ;   
           StartWiFi() ;
           bPower = true ;

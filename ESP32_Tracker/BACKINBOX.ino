@@ -112,7 +112,9 @@ void BackInTheBoxMemory(){
   ghks.ADC_Cal_Mul = 1.0 ;  */
   ghks.cpufreq = 240 ;
   ghks.displaytimer = 120 ;
-  
+
+
+  clearChartData();
   ResetSMTPInfo();
   ResetADCCalInfo();  
   clearDataLog();
@@ -135,6 +137,8 @@ int eeAddress ;
     eeAddress += sizeof(SMTP) ;
     EEPROM.get(eeAddress,adcs);
     eeAddress += sizeof(adcs) ;
+    EEPROM.get(eeAddress,chart);
+    eeAddress += sizeof(chart) ;
     
     Serial.println("Final Load EEPROM adress " +String(eeAddress));   
     
@@ -210,6 +214,8 @@ int eeAddress ;
     eeAddress += sizeof(SMTP) ;
     EEPROM.put(eeAddress,adcs);
     eeAddress += sizeof(adcs) ;
+    EEPROM.put(eeAddress,chart);
+    eeAddress += sizeof(chart) ;
     
     Serial.println("Final Save EEPROM adress " +String(eeAddress));   
     EEPROM.commit();                                                       // save changes in one go ???

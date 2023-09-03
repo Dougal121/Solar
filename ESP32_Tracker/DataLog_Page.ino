@@ -102,16 +102,18 @@ void datalog1_page(){
 
 void chart1_page(){
   int i , ii , iTmp , iX ;
-  int j , k , kk ;
+  int j , k , kk = 0;
   String message ;  
   String MyNum ;  
   String MyColor ;
   String MyColor2 ;
   byte mac[6];
+  boolean bFirst = true ;
   time_t prev_time;
   time_t min_start;
 
   for (uint8_t j=0; j<server.args(); j++){
+    k = String(server.arg(j)).toInt() ;
     i = String(server.argName(j)).indexOf("command");
     if (i != -1){  
       switch (String(server.arg(j)).toInt()){
@@ -125,8 +127,58 @@ void chart1_page(){
         case 75:  
           ReadDataLogsFromEEPROM();
         break;
+        case 78:
+          clearChartData();
+        break;
       }
     }
+    i = String(server.argName(j)).indexOf("ct");
+    if (i != -1){  
+      kk = k ;
+    }
+    
+    i = String(server.argName(j)).indexOf("cl");
+    if (i != -1){  
+      chart.trace[kk].Color = strtol(server.arg(j).c_str(), NULL, 16);
+    }
+    i = String(server.argName(j)).indexOf("dis");
+    if (i != -1){  
+      chart.trace[kk].Display = k ;
+    }
+    i = String(server.argName(j)).indexOf("ax");
+    if (i != -1){  
+      chart.trace[kk].Axis = k ;
+    }
+    i = String(server.argName(j)).indexOf("maxy0");
+    if (i != -1){  
+      chart.YMax[0] = k ;
+    }
+    i = String(server.argName(j)).indexOf("miny0");
+    if (i != -1){  
+      chart.YMin[0] = k ;
+    }
+    i = String(server.argName(j)).indexOf("maxy1");
+    if (i != -1){  
+      chart.YMax[1] = k ;
+    }
+    i = String(server.argName(j)).indexOf("miny1");
+    if (i != -1){  
+      chart.YMin[1] = k ;
+    }
+    i = String(server.argName(j)).indexOf("bgcol");
+    if (i != -1){  
+      chart.BGColor = strtol(server.arg(j).c_str(), NULL, 16);
+    }
+    i = String(server.argName(j)).indexOf("maxx");
+    if (i != -1){  
+      chart.XMax = k ;
+    }
+    i = String(server.argName(j)).indexOf("minx");
+    if (i != -1){  
+      chart.XMin = k ;
+    }
+
+  
   }
   
   SendHTTPHeader();
@@ -154,7 +206,7 @@ void chart1_page(){
       prev_time = DataLog[j].RecTime ;
       snprintf(buff, BUFF_MAX, "new Date(\'%4d-%02d-%02dT%02d:%02d:%02d\')", year(prev_time), month(prev_time), day(prev_time) , hour(prev_time), minute(prev_time), second(prev_time));    
       if ( !isnan(DataLog[j].Temp)){
-        message += "[ " + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget)  ; 
+        message += "[ " + String(buff) + "," + String(DataLog[j].Temp) + "," + String(DataLog[j].Pres/10) + "," + String(DataLog[j].RSSI) + "," + String(DataLog[j].EWAngle) + "," + String(DataLog[j].NSAngle) + "," + String(DataLog[j].EWTarget) + "," + String(DataLog[j].NSTarget)  ; 
         for ( kk = 0 ; kk < ADC_MAX_CHAN ; kk++ ) {
           message += "," + String(DataLog[j].ADCValue[kk]) ;
         }
@@ -168,19 +220,135 @@ void chart1_page(){
   }
   message += F("]);\r\n");
   server.sendContent(message);
-  message = "" ;
-     
-  message += F("var options = {title: 'System Logs 5 min intervals for last 24 Hours' , series: {0: {targetAxisIndex: 0},1: {targetAxisIndex: 0},2: {targetAxisIndex: 0},3: {targetAxisIndex: 1},4: {targetAxisIndex: 1},5: {targetAxisIndex: 1},6: {targetAxisIndex: 1}}, vAxes: { 0: {title: 'Temp,Pres,RSSI', viewWindow:{ max: 50, min: -120}}, 1: {title: 'Angle', viewWindow:{ max: 90, min: -90}}} , height: 700 , opacity:100 , interpolateNulls:true , colors: ['#ff0000','#009900','#000000','#003399','#3333ff','#ff0066','#660066'], backgroundColor: '#FFFFFF', ");  // Set chart options
+  message = "var view = new google.visualization.DataView(data);\r\n" ;
+  message += "view.setColumns([";
+  for (  i = 0 ; i < ADC_MAX_CHAN+7 ; i++ ) {
+    if ((chart.trace[i].Display % 2) == 1){
+      if ( bFirst ){
+        bFirst = false ;
+      }else{
+        message += ",";  
+      }
+      message += String(i);      
+    }
+  }
+  message += "]);\r\n" ;     
+  message += F("var options = {title: 'System Logs 5 min intervals for last 24 Hours' , series: {");
+  for (  i = 0 ; i < ADC_MAX_CHAN+7 ; i++ ) {
+    MyNum = ((chart.trace[i].Display % 2) == 1) ? "true" : "false";    
+    message += String(i) + ": {targetAxisIndex: " + String(chart.trace[i].Axis % 2) + ", visibleInLegend: "+ MyNum + " }";
+    if ( i < ADC_MAX_CHAN+6 ) 
+      message += "," ;
+  }
+  message += F("}, vAxes: { 0: {title: 'Temp,Pres,RSSI', viewWindow:{");
+  message += "max: "+String(chart.YMax[0])+", min: "+String(chart.YMin[0]);
+  message += F("}}, 1: {title: 'Angle', viewWindow:{ ");
+  message += "max: "+String(chart.YMax[1])+", min: "+String(chart.YMin[1]);
+  message += F("}}} , height: 700 , opacity:100 , interpolateNulls:true , colors: [");
+  bFirst = true ;
+  for (  i = 0 ; i < ADC_MAX_CHAN+7 ; i++ ) {
+    if ((chart.trace[i].Display % 2) == 1){
+      if ( bFirst ){
+        bFirst = false ;
+      }else{
+        message += ",";  
+      }
+      message += FormatColor(chart.trace[i].Color,"#") ;
+    }
+  }
+  message += F("],");
+  message += "backgroundColor: " + FormatColor (chart.BGColor , "#" )+  ", " ;  // Set chart options
   message += F("  };\r\n");
 
   message += F("var chart = new google.visualization.LineChart(document.getElementById('linechart'));\r\n");
-  message += F("chart.draw(data, options); } </script>\r\n");
-  message += F("<div id='linechart'></div><br>\r\n");                                          //  style='width:1000; height:800'
+  message += F("chart.draw(view, options); } </script>\r\n");
+  message += F("<div id='linechart'></div>\r\n");                                          //  style='width:1000; height:800'
+  server.sendContent(message);
+
+  
+  message = F("<table border=1 title='Chart Setup'>\r\n");
+  message += "<tr><th>No</th><th>Trace</th><th>Show</th><th>Y Axis</th><th>Color</th><th>.</th></tr>\r\n";
+  for (  i = 0 ; i < ADC_MAX_CHAN+7 ; i++ ) {
+    if ( i < 7 ){
+      switch(i){
+        case 0:  MyColor = "Temp (C)" ; break;
+        case 1:  MyColor = "Pres (mBar)" ; break;
+        case 2:  MyColor = "RSSI (dB)" ; break;
+        case 3:  MyColor = "EW Ang (Deg)" ; break;
+        case 4:  MyColor = "NS Ang (Deg)" ; break;
+        case 5:  MyColor = "EW Tar (Deg)" ; break;
+        case 6:  MyColor = "NS Tar (Deg)" ; break;
+      }
+    }
+    else{
+      MyColor = String(adcs.chan[i-7].ADC_Description) + " " + String(adcs.chan[i-7].ADC_Unit);
+    }
+    message += "<tr><form method=get action=" + server.uri() + "><input type='hidden' name='ct' value='"+String(i)+"'><td bgcolor=" + FormatColor(chart.trace[i].Color,"#") + "><font color="+FormatColor(chart.trace[i].Color ^ 0xffffff ,"#")+">"+String(i)+"</font></td>";
+    message += "<td>"+MyColor+"</td>";
+    message += F("<td><select name='dis'>") ;
+    if ( chart.trace[i].Display == 0 ){
+      message += F("<option value='0' SELECTED>0 - Hide"); 
+      message += F("<option value='1'>1 - Display"); 
+    }else{
+      message += F("<option value='0'>0 - Hide"); 
+      message += F("<option value='1' SELECTED>1 - Display"); 
+    }
+    message += "</select></td>";
+    message += F("<td><select name='ax'>") ;
+    if ( chart.trace[i].Axis == 0 ){
+      message += F("<option value='0' SELECTED>0 - Left"); 
+      message += F("<option value='1'>1 - Right"); 
+    }else{
+      message += F("<option value='0'>0 - Left"); 
+      message += F("<option value='1' SELECTED>1 - Right"); 
+    }
+    message += "</select></td>";
+    message += "<td><input type='text' name='cl' value='"+String(chart.trace[i].Color,HEX)+"'></td>";
+    message += "<td><input type='submit' value='SET'></form></td></tr>\r\n";   // 
+  }
+  message += "</table>\r\n<br><table border=1 title='Chart Setup'>\r\n" ;
+  server.sendContent(message);
+  message = "<tr><th>Parameter</th><th>Value</th><th>.</th></tr>\r\n";
+  message += "<form method=get action=" + server.uri();
+  message += F( "><tr><td>Max Left Scale</td><td align=center><input type='text' name='maxy0' value='") ; 
+  message += String(chart.YMax[0],2);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+  message += "<form method=get action=" + server.uri();
+  message += F("><tr><td>Y Min Left Scale</td><td align=center><input type='text' name='miny0' value='") ; 
+  message += String(chart.YMin[0],2);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+
+  message += "<form method=get action=" + server.uri();
+  message += F("><tr><td>Y Max Left Scale</td><td align=center><input type='text' name='maxy1' value='") ; 
+  message += String(chart.YMax[1],2);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+  message += "<form method=get action=" + server.uri();
+  message += F("><tr><td>Y Min Left Scale</td><td align=center><input type='text' name='miny1' value='") ; 
+  message += String(chart.YMin[1],2);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+
+  message += "<form method=get action=" + server.uri();
+  message += F("><tr><td>X Max Time Scale</td><td align=center><input type='text' name='maxx' value='") ; 
+  message += String(chart.XMax);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+  message += "<form method=get action=" + server.uri();
+  message += F("><tr><td>X Min Time Scale</td><td align=center><input type='text' name='minx' value='") ; 
+  message += String(chart.XMin);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+
+  message += "<form method=get action=" + server.uri();
+  message += "><tr><td bgcolor=" + FormatColor(chart.BGColor,"#") + "><font color="+FormatColor(chart.trace[i].Color ^ 0xffffff ,"#")+">Background Color</td><td align=center><input type='text' name='bgcol' value='" ; 
+  message += String(chart.BGColor,HEX);
+  message += F("' size=5></td><td><input type='submit' value='SET'></td></tr></form>\r\n") ; 
+
+  message += "</table>\r\n" ;
+  server.sendContent(message);
+  
+  message = "<br><a href="+ server.uri() + "?command=78>Clear Chart Setup</a><br>";
   message += "<a href="+ server.uri() + "?command=73>Clear Logged Data</a><br>";
   message += "<a href="+ server.uri() + "?command=74>Save Data to RTC EEPROM</a><br>\r\n";
   message += "<a href="+ server.uri() + "?command=75>Load Data from RTC EEPROM</a><br>\r\n";
   server.sendContent(message);
-  message = "" ;
   
   SendHTTPPageFooter();
 }
@@ -219,6 +387,39 @@ void clearDataLog(){
     }
   }  
   bDataLogDirty = false ; 
+}
+
+void clearChartData(){
+  chart.BGColor = 0xFFFFFF ;
+  chart.XMax = now();
+  chart.XMin = now() - SECS_PER_DAY ;
+  chart.YMax[0] = 50;
+  chart.YMin[0] = -120;
+  chart.YMax[1] = 90;
+  chart.YMin[1] = -90;
+  for ( int i = 0 ; i < (ADC_MAX_CHAN+7) ; i++ ){     
+    chart.trace[i].Display = 1 ;
+    if (( i > 2 ) && ( i < 7 )){
+      chart.trace[i].Axis = 1 ;  
+    }else{
+      chart.trace[i].Axis = 0 ;  
+    }  
+    switch(i){
+      case 0: chart.trace[i].Color = 0xFF0000 ; break ;   // Temp
+      case 1: chart.trace[i].Color = 0x009900 ; break ;   // Pres
+      case 2: chart.trace[i].Color = 0x000000 ; break ;   // RSSI
+      case 3: chart.trace[i].Color = 0x003399 ; break ;   // E/W Angle
+      case 4: chart.trace[i].Color = 0x3333FF ; break ;   // N/S Angle
+      case 5: chart.trace[i].Color = 0xFF0066 ; break ;   // E/W Target
+      case 6: chart.trace[i].Color = 0x660066 ; break ;   // N/S Target
+      case 7: chart.trace[i].Color = 0x00bfff ; break ;   // ADC Chan 0 
+      case 8: chart.trace[i].Color = 0x0080ff ; break ;   // ADC Chan 1
+      case 9: chart.trace[i].Color = 0x0040ff ; break ;   // ADC Chan 2
+      case 10: chart.trace[i].Color = 0x0000ff ; break ;  // ADC Chan 3
+      case 11: chart.trace[i].Color = 0x4000ff ; break ;  // ADC Chan 4
+      case 12: chart.trace[i].Color = 0x8000ff ; break ;  // ADC Chan 5
+    }
+  }
 }
 
 void ReadDataLogsFromEEPROM(void){
@@ -460,5 +661,10 @@ void DisplayRTCEEPROM() {
     server.sendContent(message);
   }
   SendHTTPPageFooter() ;
+}
+
+String FormatColor ( long lCol , String PreFix ){
+    snprintf(buff, BUFF_MAX, "%06X",lCol );      
+    return( "'"  + PreFix + String(buff) + "'" ) ;  
 }
 

@@ -376,9 +376,11 @@ void handleRoot() {
       MyCheck += "S" ;            
     }
   } 
-
-  message += F("<br><b>Tracker Control System</b><table border=1 title='Tracker Control'><tr><th> Parameter</th><th>Value</th><th><b>");
-  message +=  MyCheck + "</th></tr>\r\n" ; 
+  MyColor = "";
+  if (MyCheck.length() > 0 )
+    MyColor = "bgcolor='yellow'";
+  message += F("<br><b>Tracker Control System</b><table border=1 title='Tracker Control'><tr><th> Parameter</th><th>Value</th>");
+  message += "<th " + MyColor + "><b>" + MyCheck + "</th></tr>\r\n";
 
   message += F("<form method=get action=/><tr><td>Tracking Mode</td><td align=center><select name='tmode'>") ; 
   for (i = -1 ; i < 6 ; i++ ){
@@ -970,6 +972,8 @@ void SendHTTPHeader(){
   }   
   server.sendContent(message) ;  
   message = "" ;         
+  iPowerDown = ghks.displaytimer ;     // accessing web interface stops it powering down
+
 }
 
 String strPINName(int iPin,int *iTmp){
