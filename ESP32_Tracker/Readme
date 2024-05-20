@@ -19,3 +19,4 @@ Thanks to those who wrote the core of that bit !!!
 2023/08/13 More done ADC and charting added as well as emails... need to look at frequencys and power control next
 2023/08/15 More Logging and testing stuff
 2023/08/17 More work and testing on power management
+2024/05/21 Added a copy of the binary so it can be loaded into the CPU directly via OTA or ESPTool
